@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+.next/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.sqlite3
+
+# Evidence store
+evidence_store/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Temp files
+*.tmp
+prd_output.txt
+design_output.txt

@@ -1,0 +1,155 @@
+Product Requirements Document (PRD): ZAPRICA
+(Enterprise AI OSINT Platform)
+1. Product Overview & Vision
+The transition from manual Open-Source Intelligence (OSINT) gathering to automated, AI-driven investigations represents a paradigm shift in cybersecurity. Traditional platforms aggregate data via strict API integrations, leaving the cognitive burden of pivoting, hypothesis generation, and correlation entirely to the human analyst.
+ZAPRICA is a B2B enterprise-grade, autonomous AI OSINT investigation platform. It addresses the intelligence gap by deploying reasoning agents capable of operating authorized web browsers and shell environments to conduct multi-step investigations autonomously. The product vision is to shift the analyst's role from manual data gathering to strategic decision-making by utilizing agents that guarantee evidence provenance and mitigate enterprise security risks.
+2. Target Audience & User Personas
+Security Operations Center (SOC) Analysts (Tier 2/3): Need to rapidly triage and enrich indicators of compromise (IOCs) without manually bouncing between dozen tabs and APIs.
+Cyber Threat Intelligence (CTI) Teams: Require automated mapping of threat actor infrastructure across the open web and dark web.
+Digital Forensics & Incident Response (DFIR) Consultants: Need auditable, provenanced evidence collection that holds up to legal scrutiny.
+Authorized Penetration Testers: Require automated, safe reconnaissance of target infrastructure.
+3. Problem Statement & Competitive Landscape
+The cybersecurity threat intelligence market features legacy link-analysis tools, automated scanners, and emerging AI copilots. Existing products exhibit significant gaps in autonomous, non-API-dependent investigation capabilities.
+3.1 Competitor Analysis
+Product
+Core Purpose
+Primary Customer
+AI/LLM Usage
+Autonomous Pivoting
+Browser Automation
+Maltego
+OSINT Graph Analysis
+Analysts, Forensics
+Assistant (Copilot)
+Manual (Transforms)
+None
+SpiderFoot
+Automated OSINT Recon
+Pen-testers, SOC
+None
+Rule-based limits
+None
+Microsoft Security Copilot
+Security Orchestration
+SOC Analysts
+Advanced (Planner LLM)
+Guided workflows
+None (API restricted)
+Searchlight Cyber
+Dark Web Intelligence
+Gov, Law Enforcement
+Manual/Search
+None
+None
+Recorded Future
+Threat Intelligence
+Enterprise CTI Teams
+Report Summarization
+None
+None
+ZAPRICA (Our Platform)
+Autonomous OSINT
+Enterprise CTI & DFIR
+Planner & Extractor LLMs
+Fully Autonomous
+Yes (Accessibility Tree)
+Maltego: Relies on graphical node-link analysis1. It integrates via APIs and offers an AI Assistant2. However, it requires a pre-built API transform for every action.
+SpiderFoot: Relies strictly on static Python scripts and APIs1. Cannot effectively handle modern anti-bot protections or dynamic JavaScript.
+Microsoft Security Copilot: Employs semi-autonomous agents that follow defined triggers utilizing JSON-RPC-based plugins4. It is explicitly bound to predefined APIs.
+Searchlight Cyber & Recorded Future: Act as data oracles rather than autonomous investigation agents executing the steps7.
+4. Functional Requirements
+4.1 The Execution Orchestrator
+Requirement: The system must support long-running, multi-step investigations that survive transient network failures or backend crashes.
+Implementation: The architecture must utilize Durable Execution (Temporal.io + LangGraph). LangGraph maps the stateful agent loops, while Temporal.io orchestrates the workflows, ensuring state persistence during rate-limit pauses or deep recursive searches11.
+4.2 The Browser Agent Worker
+Requirement: The system must navigate dynamic web pages autonomously when APIs are unavailable.
+Implementation: ZAPRICA will utilize a browser agent orchestrated by the browser-use Python library running on Playwright14.
+Context Pruning: To prevent LLM context-window exhaustion, the system will use an Accessibility Tree extraction strategy rather than passing raw HTML. The agent focuses on interactive elements, using unique IDs to issue commands17.
+Human-in-the-Loop (HITL): If the agent encounters a CAPTCHA, Temporal.io must automatically pause execution and present a HITL interface for analyst intervention16.
+4.3 The Shell Agent Sandbox
+Requirement: The agent must safely execute required command-line utilities (e.g., nmap, whois) without risking host compromise.
+Implementation: All shell execution must be routed into ephemeral Docker containers running with read-only filesystems. Strict seccomp (secure computing mode) profiles must filter and drop dangerous system calls, limiting execve to an authorized whitelist19.
+4.4 Tool Registry
+Requirement: The platform must support a standardized plugin architecture for expanding OSINT capabilities.
+Implementation: ZAPRICA will integrate tools using the Model Context Protocol (MCP). The backend will expose available modules using JSON-RPC 2.0 messages (such as tools/list and tools/call)21.
+4.5 Knowledge Graph & Entity Resolution
+Requirement: The system must store intelligence findings recursively and ensure no duplicate entities are created.
+Implementation: ZAPRICA will utilize PostgreSQL combined with the Apache AGE extension. This provides openCypher graph querying capabilities directly within PostgreSQL, avoiding the infrastructure overhead of a standalone Neo4j cluster for the MVP27.
+Provenance: Every finding must be cryptographically anchored. The evidence schema will store the entity, source URL, an ISO 8601 timestamp, an S3 object pointer for the raw screenshot/HTML, and a SHA-256 hash.
+5. Non-Functional Requirements (Security & Privacy)
+5.1 Security & Threat Mitigation
+ZAPRICA must mitigate the OWASP Top 10 for LLM Applications (2025/2026)30.
+Defending Against Indirect Prompt Injection (LLM01): To prevent compromised web pages from hijacking the agent32, ZAPRICA will implement the Dual LLM (DualView) Pattern34.
+Privileged Planner LLM: Holds instructions and tool privileges but cannot read raw, untrusted external web data.
+Quarantined Extractor LLM: Reads raw web page content but possesses zero tool-calling capabilities; it is constrained to outputting structured JSON.
+Defending Against Excessive Agency (LLM06): Mitigated through strict validation of JSON-RPC parameters in the MCP Tool Registry38.
+5.2 Privacy & Legal Compliance
+Note: Subject to legal counsel review.
+The system must comply with the Indian Digital Personal Data Protection (DPDP) Act, 2023. Specifically, it leverages Section 3(c)(ii), which exempts personal data made publicly available voluntarily by the Data Principal or under a legal obligation39.
+Controls: The platform must enforce an Authorized-Use Policy (digital attestations per case), immutable audit logging, and automated data purging policies.
+6. Business Model & Pricing
+ZAPRICA will operate on a Hybrid Enterprise Model (Platform Fee + Capacity):
+A fixed annual platform fee grants access to the software, RBAC, data segregation, and baseline user seats.
+Customers receive a baseline allocation of "Agent Compute Hours."
+Additional intensive autonomous investigations are billed in bulk API tiers to protect vendor margins against variable LLM inference costs.
+7. Development Roadmap & Milestones
+Phase 1 (MVP - Months 1-2): FastAPI backend, LangGraph state machine, MCP Tool Registry, PostgreSQL + Apache AGE database, DualView security architecture. (Goal: Hackathon demo and angel pitching).
+Phase 2 (Seed Stage - Months 3-8): Migrate state orchestration entirely to Temporal.io for durable execution. Implement Kubernetes horizontal pod autoscaling for Browser Workers. Complete SOC2 readiness assessments.
+Phase 3 (Series A - Months 9-18): Full microservices architecture. Implement Kong API Gateway for advanced rate-limiting, SAML/SSO integrations, and integrate egress proxy networks with rotating IPs. Establish official channel partnerships with threat intelligence feeds.
+8. Source Documentation
+browser-use architecture and Playwright DOM extraction14.
+Temporal.io durable execution for AI agents11.
+Docker Container Isolation and seccomp profiles19.
+Model Context Protocol (MCP) JSON-RPC 2.0 specifications21.
+Apache AGE and PostgreSQL graph database integrations27.
+DualView / Dual LLM architectures against Indirect Prompt Injection34.
+OWASP Top 10 for LLM Applications 2025/2026 (LLM01, LLM06)30.
+Digital Personal Data Protection (DPDP) Act, 2023 - Section 3 publicly available data39.
+Competitor capabilities1.
+Cybench: Framework for Evaluating Cybersecurity Capabilities of LLMs43.
+Works cited
+davidalex89/Infosec_Tools - GitHub, https://github.com/davidalex89/Infosec_Tools
+Open Source Intelligence Tools: 10 OSINT Tools Ranked (2026), https://marketintelligencetools.com/rankings/open-source-intelligence-tools//
+Maltego for Cyber Threat Intelligence, https://www.maltego.com/solutions/cyber-threat-intelligence/
+What is Microsoft Security Copilot?, https://learn.microsoft.com/en-us/copilot/security/microsoft-security-copilot
+Agent Components | Microsoft Learn, https://learn.microsoft.com/en-us/copilot/security/developer/agent-components
+Copilot Agent Standards - Libre DevOps, https://libredevops.org/docs/documents/copilot-agent-standards/
+Searchlight Threat – Monitor Reviews & Ratings 2026 - Gartner, https://www.gartner.com/reviews/product/searchlight-threat-monitor
+Powerful integrations and API > Searchlight Cyber, https://www.slcyber.io/integrations
+Searchlight Cyber DarkIQ - CTI-Product-Assesment-Matrix - GitHub, https://github.com/Masriyan/CTI-Product-Assesment-Matrix/blob/main/2025/tier3/searchlight.md
+DarkIQ Reviews in 2026 - SourceForge, https://sourceforge.net/software/product/DarkIQ/
+Durable AI | Temporal Documentation, https://docs.temporal.io/ai
+Building Agentic Workflows for administration that actually run — v1, https://medium.com/@shb.pndr/building-agentic-workflows-for-administration-that-actually-run-v1-13473b4331a0
+From prototype to production-ready agentic AI solution: A use case, https://temporal.io/blog/prototype-to-prod-ready-agentic-ai-grid-dynamics
+10 Best Open-Source AI Agents for 2026 - DEV Community, https://dev.to/sonotommy/10-best-open-source-ai-agents-for-2026-2l6p
+Building Browser-Using AI Agents in Python, https://machinelearningmastery.com/building-browser-using-ai-agents-in-python/
+How to Build a Local SEO Audit Agent with Browser Use and Claude, https://www.freecodecamp.org/news/how-to-build-a-local-seo-audit-agent-with-browser-use-and-claude-api/
+Computer use and browser agents: vision, interaction, and the GUI, https://www.kunwar.page/chapter/134-computer-use-and-browser-agents-vision-interaction-and-the-gui-as-api-pattern
+Browser Automation in 2026: The Complete Guide | Unbrowse Blog, https://www.unbrowse.ai/blog/browser-automation-2026-complete-guide
+Docker & Container Isolation Architecture - CyberCloud Guru, https://cybercloud.guru/product-security/container-security/docker-container-isolation-architecture/
+CVE-2026-41900-POC - Kitploit, https://kitploit.com/en/tools/github/christbowel/cve-2026-41900-poc
+A Deep Dive into the Model Context Protocol (MCP) - ZBrain, https://zbrain.ai/model-context-protocol/
+Specification - What is the Model Context Protocol (MCP)?, https://modelcontextprotocol.io/specification/2025-11-25
+Model Context Protocol (MCP) Extensions for Network Equipment, https://www.ietf.org/archive/id/draft-zw-opsawg-mcp-network-mgmt-00.html
+Tools - Model Context Protocol, https://modelcontextprotocol.io/specification/draft/server/tools
+Tools - Model Context Protocol （MCP）, https://modelcontextprotocol.info/specification/draft/server/tools/
+MCP Message Types: Complete MCP JSON-RPC Reference Guide, https://portkey.ai/blog/mcp-message-types-complete-json-rpc-reference-guide/
+CognoDB Graph Database Benchmark Report | Latency (Engineering), https://www.scribd.com/document/1074609609/CognoDB-Graph-Database-Benchmark-Report
+Postgres as a Graph Database: Four Approaches Compared, https://polygres.com/blog/postgres-as-a-graph-database
+Knowledge Graph vs Vector Search for Agent Memory - Maximem, https://www.maximem.ai/blog/knowledge-graph-vs-vector-search-agent-memory
+OWASP Top 10 for LLM Applications 2025, https://owasp.github.io/www-project-top-10-for-large-language-model-applications/assets/PDF/OWASP-Top-10-for-LLMs-v2025.pdf
+OWASP Top 10 for LLM Applications 2025 report, https://help.hcl-software.com/appscan/Enterprise/10.11.0/topics/r_owasp_top_10_for_llm.html
+What are prompt injection attacks? Definition, types, examples, https://www.fortinet.com/resources/cyberglossary/prompt-injection
+Prompt injection: types, real-world CVEs, and enterprise defenses, https://www.vectra.ai/topics/prompt-injection
+DualView: Preventing Indirect Prompt Injection in Personal AI Agents, https://arxiv.org/pdf/2607.03821
+Securing AI Agents with Information-Flow Control - arXiv, https://arxiv.org/pdf/2505.23643
+Design Patterns for Securing LLM Agents against Prompt Injections, https://www.alphaxiv.org/abs/2506.08837
+DualView: Preventing Indirect Prompt Injection in Personal AI Agents, https://arxiv.org/html/2607.03821v2
+LLM06 Excessive Agency | Agent Security Map - Deepak Gupta, https://guptadeepak.com/agent-security/threats/llm06/
+Digital Personal Data Protection Act, 2023 DPDPA SECTION 3, https://www.dpdpa.com/dpdpa2023/chapter-1/section3.html
+(PDF) THE DIGITAL PERSONAL DATA PROTECTION ACT OF 2023, https://www.researchgate.net/publication/387550185_THE_DIGITAL_PERSONAL_DATA_PROTECTION_ACT_OF_2023_STRENGTHENING_PRIVACY_IN_THE_DIGITAL_AGE
+the digital personal data protection bill, 2023, https://sansad.in/getFile/BillsTexts/LSBillTexts/Asintroduced/113_2023_LS_Eng83202330313PM.pdf?source=legislation&mc_cid=ef1ba9ec5f&mc_eid=214c3710f8
+THE DIGITAL PERSONAL DATA PROTECTION ACT, 2023 (NO. 22, https://www.meity.gov.in/static/uploads/2024/06/2bf1f0e9f04e6fb4f8fef35e82c42aa5.pdf
+Cybench: A Framework for Evaluating Cybersecurity Capabilities, https://arxiv.org/abs/2408.08926
+Cybench: A Framework for Evaluating Cybersecurity Capabilities, https://arxiv.org/html/2408.08926v2
+comparing ai agents to cybersecurity professionals - arXiv, https://arxiv.org/pdf/2512.09882

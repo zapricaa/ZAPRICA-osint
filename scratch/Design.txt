@@ -1,0 +1,103 @@
+System Design Document (SDD): ZAPRICA
+(Enterprise AI OSINT Platform)
+1. System Overview
+ZAPRICA is an enterprise-grade, autonomous AI Open-Source Intelligence (OSINT) platform. It replaces manual API-based intelligence gathering with an autonomous agentic workflow. The system provisions AI agents capable of reasoning, planning, and executing authorized cybersecurity tasks through sandboxed web browsers and shell environments.
+2. High-Level Architecture
+The system follows a decoupled, asynchronous microservices architecture to ensure the long-running nature of OSINT investigations does not block system resources.
+The architecture is divided into four primary layers:
+Presentation Layer: React/Next.js dashboard rendering a live node-link graph.
+API Gateway & Auth Layer: FastAPI handling user authentication, RBAC, and case management.
+Orchestration Layer: Temporal.io server managing stateful LangGraph workflows.
+Execution Layer (Isolated Workers): Dedicated worker nodes for Browser tasks, Shell tasks, and API calls.
+3. Core Component Design
+3.1 The Execution Orchestrator
+OSINT investigations often encounter rate limits or require deep recursion, meaning processes can run for hours.
+Technology: LangGraph + Temporal.io1.
+Design: LangGraph acts as the state machine defining the autonomous loop (Plan -> Execute -> Extract -> Graph). Temporal.io orchestrates these graphs as durable executions, ensuring that if a worker crashes or a network times out, the exact state of the investigation is preserved and resumed automatically3.
+3.2 Browser Agent Worker
+To extract intelligence from dynamic, JavaScript-heavy sites that lack public APIs, ZAPRICA utilizes a headless browser agent.
+Technology: Playwright and the browser-use Python library4.
+Design: Instead of overwhelming the LLM's context window with raw HTML DOMs, the worker utilizes an Accessibility Tree extraction strategy. The page is parsed into a simplified tree of interactive elements, assigning unique IDs that the LLM references to execute spatial commands (e.g., click(element_12))7.
+Human-in-the-Loop (HITL): If the worker encounters a strict CAPTCHA, it suspends the Temporal workflow and alerts the dashboard for human intervention, resuming automatically once solved6.
+3.3 Shell Agent Sandbox
+Cybersecurity analysts require command-line utilities (e.g., whois, nmap).
+Technology: Docker, Linux seccomp.
+Design: The LLM never accesses the host shell. Every shell tool request spins up an ephemeral, single-use Docker container9. The container enforces a read-only filesystem and a strict seccomp profile that drops dangerous system calls, limiting execution strictly to a whitelist of authorized binaries10.
+3.4 Tool Registry (Plugin System)
+ZAPRICA integrates diverse OSINT tools uniformly without hardcoding them into the main agent loop.
+Technology: Model Context Protocol (MCP)11.
+Design: The system acts as an MCP Server exposing tools via JSON-RPC 2.0 messages13. The agent discovers tools using tools/list and executes them via tools/call14. This standardized schema validation prevents malformed arguments from reaching the execution layer.
+4. Database & Knowledge Graph Design
+A unified database architecture reduces latency and deployment complexity compared to maintaining separate relational and graph clusters.
+Technology: PostgreSQL + Apache AGE extension17.
+Design: Apache AGE provides openCypher graph querying capabilities directly within PostgreSQL19. Standard SQL handles tenant isolation and case management, while AGE manages recursive entity mapping.
+4.1 Schema Overview
+Users/Tenants (SQL): users, organizations, cases, audit_logs.
+Graph Nodes (AGE): Person, Organization, Domain, IP, Email, File_Hash.
+Graph Edges (AGE): resolves_to, associated_with, mentions.
+Evidence Model (SQL): Every edge mapped in the graph points to a relational row storing the source URL, an ISO 8601 timestamp, a SHA-256 cryptographic hash of the raw evidence, and an S3 bucket URI containing the raw screenshot or log output.
+5. Security Architecture (Threat Mitigation)
+Because the agent interacts with untrusted external web data, mitigating Prompt Injection is the highest security priority. ZAPRICA addresses the OWASP Top 10 for LLM Applications (2025/2026)20.
+5.1 Dual LLM (DualView) Pattern (Mitigates OWASP LLM01)
+To prevent Indirect Prompt Injection (IPI), where a malicious web page instructs the agent to execute unauthorized commands22, ZAPRICA enforces strict Information Flow Control (IFC)24.
+Privileged Planner LLM: Responsible for logic and tool execution. It is strictly quarantined from reading raw web data.
+Quarantined Extractor LLM: Reads the raw, potentially malicious web pages. It has zero tool-calling privileges and is constrained strictly to structured JSON output25.
+Result: Malicious instructions on a target website are processed as inert text by the Extractor, preventing the Planner from being hijacked.
+5.2 Excessive Agency Mitigation (Mitigates OWASP LLM06)
+Mitigated by strictly defining execution scopes in the MCP Tool Registry and validating all JSON-RPC arguments against regex allowlists prior to Docker execution28.
+6. Privacy & Compliance Controls
+Note: Subject to legal counsel review.
+Data Protection: Designed to comply with the Indian Digital Personal Data Protection (DPDP) Act, 2023, specifically leveraging Section 3(c)(ii) regarding personal data made voluntarily publicly available29.
+Auditability: Immutable logging of all agent actions, ensuring analysts can prove intelligence was gathered from lawful, public sources.
+Data Minimization: Automated TTL (Time-To-Live) purging of investigation data once a case is closed.
+7. Basic Data Flow (Investigation Loop)
+Seed Input: User initiates a case with a seed (e.g., Domain: example.com).
+Discovery: The Privileged Planner queries the MCP Registry (tools/list) and selects a relevant tool (tools/call).
+Execution: The Temporal orchestrator routes the request to the appropriate isolated worker (Browser or Shell).
+Extraction: The worker fetches the raw data and passes it to the Quarantined Extractor LLM.
+Sanitization: The Extractor returns a sanitized JSON array of identified entities.
+Resolution: The backend normalizes the entities, hashes them, and checks PostgreSQL/AGE for duplicates.
+Graphing: New nodes and edges are inserted; evidence is hashed and backed up to S3.
+Re-Evaluation: The Planner evaluates the new nodes and decides if further pivoting is required.
+8. Source Documentation
+browser-use architecture and Playwright extraction4.
+Temporal.io durable execution for AI agents1.
+Docker Container Isolation and seccomp profiles9.
+Model Context Protocol (MCP) JSON-RPC 2.0 specifications11.
+Apache AGE and PostgreSQL graph database integrations17.
+DualView / Dual LLM architectures against Indirect Prompt Injection24.
+OWASP Top 10 for LLM Applications 2025/2026 (LLM01, LLM06)20.
+Digital Personal Data Protection (DPDP) Act, 2023 - Section 329.
+Works cited
+Durable AI | Temporal Documentation, https://docs.temporal.io/ai
+Building Agentic Workflows for administration that actually run — v1, https://medium.com/@shb.pndr/building-agentic-workflows-for-administration-that-actually-run-v1-13473b4331a0
+From prototype to production-ready agentic AI solution: A use case, https://temporal.io/blog/prototype-to-prod-ready-agentic-ai-grid-dynamics
+10 Best Open-Source AI Agents for 2026 - DEV Community, https://dev.to/sonotommy/10-best-open-source-ai-agents-for-2026-2l6p
+Building Browser-Using AI Agents in Python, https://machinelearningmastery.com/building-browser-using-ai-agents-in-python/
+How to Build a Local SEO Audit Agent with Browser Use and Claude, https://www.freecodecamp.org/news/how-to-build-a-local-seo-audit-agent-with-browser-use-and-claude-api/
+Computer use and browser agents: vision, interaction, and the GUI, https://www.kunwar.page/chapter/134-computer-use-and-browser-agents-vision-interaction-and-the-gui-as-api-pattern
+Browser Automation in 2026: The Complete Guide | Unbrowse Blog, https://www.unbrowse.ai/blog/browser-automation-2026-complete-guide
+Docker & Container Isolation Architecture - CyberCloud Guru, https://cybercloud.guru/product-security/container-security/docker-container-isolation-architecture/
+CVE-2026-41900-POC - Kitploit, https://kitploit.com/en/tools/github/christbowel/cve-2026-41900-poc
+A Deep Dive into the Model Context Protocol (MCP) - ZBrain, https://zbrain.ai/model-context-protocol/
+Specification - What is the Model Context Protocol (MCP)?, https://modelcontextprotocol.io/specification/2025-11-25
+Model Context Protocol (MCP) Extensions for Network Equipment, https://www.ietf.org/archive/id/draft-zw-opsawg-mcp-network-mgmt-00.html
+Tools - Model Context Protocol, https://modelcontextprotocol.io/specification/draft/server/tools
+Tools - Model Context Protocol （MCP）, https://modelcontextprotocol.info/specification/draft/server/tools/
+MCP Message Types: Complete MCP JSON-RPC Reference Guide, https://portkey.ai/blog/mcp-message-types-complete-json-rpc-reference-guide/
+CognoDB Graph Database Benchmark Report | Latency (Engineering), https://www.scribd.com/document/1074609609/CognoDB-Graph-Database-Benchmark-Report
+Postgres as a Graph Database: Four Approaches Compared, https://polygres.com/blog/postgres-as-a-graph-database
+Knowledge Graph vs Vector Search for Agent Memory - Maximem, https://www.maximem.ai/blog/knowledge-graph-vs-vector-search-agent-memory
+OWASP Top 10 for LLM Applications 2025, https://owasp.github.io/www-project-top-10-for-large-language-model-applications/assets/PDF/OWASP-Top-10-for-LLMs-v2025.pdf
+OWASP Top 10 for LLM Applications 2025 report, https://help.hcl-software.com/appscan/Enterprise/10.11.0/topics/r_owasp_top_10_for_llm.html
+What are prompt injection attacks? Definition, types, examples, https://www.fortinet.com/resources/cyberglossary/prompt-injection
+Prompt injection: types, real-world CVEs, and enterprise defenses, https://www.vectra.ai/topics/prompt-injection
+Securing AI Agents with Information-Flow Control - arXiv, https://arxiv.org/pdf/2505.23643
+DualView: Preventing Indirect Prompt Injection in Personal AI Agents, https://arxiv.org/pdf/2607.03821
+Design Patterns for Securing LLM Agents against Prompt Injections, https://www.alphaxiv.org/abs/2506.08837
+DualView: Preventing Indirect Prompt Injection in Personal AI Agents, https://arxiv.org/html/2607.03821v2
+LLM06 Excessive Agency | Agent Security Map - Deepak Gupta, https://guptadeepak.com/agent-security/threats/llm06/
+Digital Personal Data Protection Act, 2023 DPDPA SECTION 3, https://www.dpdpa.com/dpdpa2023/chapter-1/section3.html
+(PDF) THE DIGITAL PERSONAL DATA PROTECTION ACT OF 2023, https://www.researchgate.net/publication/387550185_THE_DIGITAL_PERSONAL_DATA_PROTECTION_ACT_OF_2023_STRENGTHENING_PRIVACY_IN_THE_DIGITAL_AGE
+the digital personal data protection bill, 2023, https://sansad.in/getFile/BillsTexts/LSBillTexts/Asintroduced/113_2023_LS_Eng83202330313PM.pdf?source=legislation&mc_cid=ef1ba9ec5f&mc_eid=214c3710f8
+THE DIGITAL PERSONAL DATA PROTECTION ACT, 2023 (NO. 22, https://www.meity.gov.in/static/uploads/2024/06/2bf1f0e9f04e6fb4f8fef35e82c42aa5.pdf
