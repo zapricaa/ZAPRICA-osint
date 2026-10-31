@@ -280,3 +280,66 @@ flowchart TD
         ISSUE_SESSION --> JWT["Return Signed JWT + Session Token"]
     end
 ```
+
+
+---
+
+## 8. Frontend UI & Component Route Map
+
+```mermaid
+flowchart TD
+    ROOT["Root Entry (/)"] --> REDIRECT{"Authenticated?"}
+    REDIRECT -->|"No"| LOGIN["/login (Argon2id + TOTP Challenge)"]
+    REDIRECT -->|"Yes"| DASHBOARD["/dashboard (Metrics, Safe Mode, Fleet Status)"]
+    
+    LOGIN --> ACCEPT["/accept-invitation (Token Activation)"]
+    
+    subgraph APP_SHELL ["ZAPRICA Application Shell (Sidebar + Navbar)"]
+        DASHBOARD
+        
+        subgraph INVESTIGATIONS ["Investigation Domain"]
+            INV_LIST["/investigations (Workspaces Catalogue)"]
+            INV_NEW["/investigations/new (Target Wizard + Scope Allow/Deny)"]
+            INV_DETAIL["/investigations/[id] (Live Workspace, LangGraph Stages, SSE Stream)"]
+        end
+        
+        subgraph INTELLIGENCE ["Intelligence & Evidence"]
+            EVD["/evidence (SHA-256 Provenance Explorer)"]
+            REP["/reports (Empirical Facts vs Inferences Separation)"]
+        end
+        
+        subgraph MANAGEMENT ["System & Administration"]
+            TOOLS["/tools (TIMS Sandbox Testing & Approval Lifecycle)"]
+            AGENTS["/agents (Main Head, Browser Head, Terminal Head Supervision)"]
+            ADMIN["/admin (User Management, Invites, Sessions, Terminal Exec Toggle)"]
+        end
+    end
+    
+    INV_NEW --> INV_DETAIL
+    INV_DETAIL --> REP
+    INV_DETAIL --> EVD
+```
+
+---
+
+## 9. Deployment Architecture & Docker Multi-Service Topology
+
+```mermaid
+flowchart LR
+    subgraph CLIENT ["Client Tier"]
+        BROWSER["Web Browser / Security Analyst"]
+    end
+
+    subgraph DOCKER_NETWORK ["Isolated Docker Bridge Network (zaprica-net)"]
+        FRONTEND["frontend:3000\n(Next.js 14 Production Server)"]
+        BACKEND["backend:8000\n(FastAPI / Uvicorn Application Server)"]
+        POSTGRES[("db:5432\n(PostgreSQL 16 Alpine Database)")]
+        SANDBOX["Isolated Container Sandbox\n(Ephemeral Tool Execution)"]
+    end
+
+    BROWSER -->|"HTTPS / Port 3000"| FRONTEND
+    FRONTEND -->|"Internal Proxy (/api & SSE)"| BACKEND
+    BACKEND <-->|"Async SQLAlchemy / asyncpg"| POSTGRES
+    BACKEND -->|"Controlled Tool Gateway API"| SANDBOX
+    BACKEND -->|"Egress Proxy & Firewall"| INTERNET["Target OSINT Targets (Internet)"]
+```

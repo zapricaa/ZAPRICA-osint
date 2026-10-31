@@ -89,11 +89,21 @@
 - [x] Read-only DB health check on startup.
 - [x] Admin override endpoints to enable terminal capabilities with audit logging.
 
-## Phase 11: Frontend Dashboard & Interactive Views [IN PROGRESS]
-- [ ] Connect Next.js frontend to backend API and SSE.
-- [ ] Build `/login` (username/email, password, MFA challenge).
-- [ ] Build `/dashboard`, `/investigations`, `/evidence`, `/tools`, `/reports`, `/admin`.
+## Phase 11: Frontend Dashboard & Interactive Views [COMPLETED]
+- [x] Connect Next.js frontend to backend API and SSE.
+- [x] Build `/login` (username/email, password, MFA challenge, one-time super admin bootstrap).
+- [x] Build `/accept-invitation` (token acceptance, password setup).
+- [x] Build `/dashboard` (operational metrics, safe mode badge, agent fleet status, recent missions).
+- [x] Build `/investigations` (workspace catalogue) and `/investigations/new` (target wizard with SSRF scope boundaries).
+- [x] Build `/investigations/[id]` (live workspace, LangGraph stage visualizer, tasks, evidence, SSE event feed).
+- [x] Build `/evidence` (SHA-256 provenance explorer, copy hash, media filters).
+- [x] Build `/tools` (TIMS tool lifecycle: draft, approve, publish to agents).
+- [x] Build `/reports` (intelligence synthesis with observed facts vs inferences separation).
+- [x] Build `/agents` (agent fleet supervision cards).
+- [x] Build `/admin` (user management, invitation generator, sessions, login attempts audit, safe mode toggle).
+- [x] Type checking and static production build verified (`npm run build`).
 
-## Phase 12: Deployment & Packaging [PENDING]
-- [ ] Dockerfile for backend and frontend.
-- [ ] `docker-compose.yml` for unified local stack.
+## Phase 12: Deployment & Packaging [COMPLETED]
+- [x] Multi-stage `backend/Dockerfile` with non-root user and Playwright chromium.
+- [x] Multi-stage `frontend/Dockerfile` with non-root user and production server.
+- [x] `docker-compose.yml` for unified local stack with PostgreSQL 16 Alpine and healthchecks.

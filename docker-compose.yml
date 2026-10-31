@@ -1,0 +1,60 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: zaprica-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: zaprica
+      POSTGRES_USER: zaprica
+      POSTGRES_PASSWORD: zaprica_secure_password_replace_in_prod
+    ports:
+      - "5432:5432"
+    volumes:
+      - zaprica-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zaprica -d zaprica"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: zaprica-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://zaprica:zaprica_secure_password_replace_in_prod@db:5432/zaprica
+      - ZAPRICA_SAFE_MODE=true
+      - TERMINAL_EXECUTION_ENABLED=false
+      - AUTO_INVESTIGATION_ENABLED=false
+      - AUTO_TOOL_INSTALLATION=false
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MAIN_HEAD_MODEL=gemini-3.8-flash
+      - GEMINI_BROWSER_HEAD_MODEL=gemini-3.5-flash-lite
+      - GEMINI_TERMINAL_HEAD_MODEL=gemini-3.5-flash-lite
+      - SECRET_KEY=${SECRET_KEY:-zaprica_production_secret_key_minimum_32_characters}
+      - ZAPRICA_BOOTSTRAP_SECRET=${ZAPRICA_BOOTSTRAP_SECRET:-zaprica_bootstrap_superadmin_secret}
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: zaprica-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8000
+    ports:
+      - "3000:3000"
+
+volumes:
+  zaprica-postgres-data:

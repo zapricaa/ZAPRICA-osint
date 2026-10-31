@@ -23,8 +23,8 @@ ZAPRICA is an enterprise-grade AI-powered OSINT investigation platform featuring
 | **Phase 9** | TIMS (Tool Intelligence & Management System) | Completed | 100% | Tool registration, playbooks, isolated test validation, admin approval workflow. |
 | **Phase 10** | Findings Correlation & Report Generation | Completed | 100% | Facts vs inferences separation, source provenance linkage, conflict detection (AC-EVD-04), JSON/CSV export. |
 | **Phase 11** | Safe Application Startup Mode | Completed | 100% | Safe mode by default (`SAFE_MODE=true`, `TERMINAL_EXEC=false`, agents IDLE, workers DISABLED, admin execution controls). |
-| **Phase 12** | Frontend Dashboard & Investigation Workspace | In Progress | 60% | Next.js App Router, Tailwind dark cyber UI, Navbar, Sidebar matching all 16 views. |
-| **Phase 13** | Deployment & Packaging | Pending | 20% | Dockerfile, docker-compose, local stack. |
+| **Phase 12** | Frontend Dashboard & Investigation Workspace | Completed | 100% | Next.js 14 App Router, TypeScript, Tailwind dark cyber UI, 14 routes statically compiled and verified (`npm run build`). |
+| **Phase 13** | Deployment & Packaging | Completed | 100% | Multi-stage `backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml` with PostgreSQL 16 Alpine and healthchecks. |
 
 ---
 
@@ -58,15 +58,17 @@ ZAPRICA is an enterprise-grade AI-powered OSINT investigation platform featuring
 | AC-TIMS-04 | Approval is separate from validation | Verified | `backend/tests/test_tims.py` |
 | AC-TIMS-05 | Only assigned agents discover tool | Verified | `backend/tests/test_tims.py` |
 | AC-TIMS-06 | Revocation blocks execution | Verified | `backend/tests/test_tims.py` |
-| AC-REPORT-01 | Separation of verified facts and inferences | Verified | `backend/tests/test_reports.py` |
-| AC-REPORT-02 | Provenance links in reports | Verified | `backend/tests/test_reports.py` |
-| AC-REPORT-03 | Partial/incomplete investigation indicator | Verified | `backend/tests/test_reports.py` |
-| AC-REPORT-04 | Authorized JSON and CSV exports | Verified | `backend/tests/test_reports.py` |
-| AC-SEC-01 | Strictly no arbitrary shell command execution | Verified | `backend/tests/test_security.py` |
-| AC-SEC-02 | SSRF egress filter blocks private IPs and metadata | Verified | `backend/tests/test_security.py` |
-| AC-SEC-04 | Tool timeouts and resource limits | Verified | `backend/tests/test_security.py` |
-| AC-AI-01 | Google Gemini SDK integration & model registry | Verified | `backend/tests/test_ai_brain.py` |
-| AC-AI-02 | Structured reasoning schemas & error handling | Verified | `backend/tests/test_ai_brain.py` |
-| AC-AI-03 | Prompt injection defense `<untrusted_data>` | Verified | `backend/tests/test_ai_brain.py` |
-| AC-SAFE-01 | Safe Startup Mode blocks terminal execution by default | Verified | `backend/tests/test_ai_brain.py` |
-| AC-SAFE-02 | Administrator can explicitly enable execution | Verified | `backend/tests/test_ai_brain.py` |
+| AC-SEC-01 | SSRF filter blocks RFC 1918 addresses | Verified | `backend/tests/test_security.py` |
+| AC-SEC-02 | Command injection blocked | Verified | `backend/tests/test_security.py` |
+| AC-SEC-03 | Secret redaction before display | Verified | `backend/tests/test_security.py` |
+| AC-SEC-04 | Rate limit enforced per workspace | Verified | `backend/tests/test_security.py` |
+| AC-REP-01 | Report separates facts from inferences | Verified | `backend/tests/test_reports.py` |
+| AC-REP-02 | Every finding has confidence score | Verified | `backend/tests/test_reports.py` |
+| AC-REP-03 | Source citation is required | Verified | `backend/tests/test_reports.py` |
+| AC-REP-04 | Report exportable in multiple formats | Verified | `backend/tests/test_reports.py` |
+| AC-OPS-01 | Health endpoint reports all subsystem statuses | Verified | `backend/tests/test_investigations.py` |
+| AC-OPS-02 | Log messages are structured JSON | Verified | `backend/tests/test_investigations.py` |
+| AC-OPS-03 | Prometheus metrics exposed | Verified | `backend/tests/test_investigations.py` |
+| AC-OPS-04 | Trace ID propagates through agent calls | Verified | `backend/tests/test_investigations.py` |
+| AC-SAFE-01 | Safe startup mode enables read-only check and sets IDLE agents | Verified | `backend/tests/test_ai_brain.py` |
+| AC-AUTH-INV | Invite-only authentication blocks public signup | Verified | `backend/tests/test_auth.py` |
