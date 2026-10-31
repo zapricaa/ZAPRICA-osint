@@ -24,6 +24,7 @@ from app.ai.schemas.reasoning import (
     TerminalTaskDecompositionSchema,
 )
 from app.agents.terminal_head.tool_gateway import tool_gateway
+from app.core.safe_mode import safe_mode_controller
 from fastapi import HTTPException
 
 
@@ -162,14 +163,29 @@ async def test_failure_handling_and_rejection():
 async def test_function_calling_and_tool_gateway_validation():
     """
     Verify function calling integration with Tool Gateway:
+    - Safe startup mode blocks execution by default (HTTP 403).
+    - Administrator explicitly enables terminal execution.
     - LLM proposes tool call.
     - System validates tool name against registered tools.
     - System verifies target arguments.
     - Arbitrary shell execution is strictly blocked.
     """
+    # Step 0: In Safe Startup Mode, terminal execution is blocked by default
+    safe_mode_controller.disable_terminal_execution("test_init")
+    with pytest.raises(HTTPException) as safe_exc:
+        await tool_gateway.execute_tool(
+            tool_id="dns_lookup",
+            arguments={"target": "example.com", "record_type": "A"},
+        )
+    assert safe_exc.value.status_code == 403
+    assert "Safe Startup Mode" in safe_exc.value.detail
+
+    # Step 1: Admin enables approved execution capability
+    safe_mode_controller.enable_terminal_execution("admin_tester", "Automated test verification")
+
     mock_provider = MockLLMProvider()
 
-    # Step 1: LLM proposes tool call
+    # Step 2: LLM proposes tool call
     proposed = await mock_provider.propose_tool_call(
         prompt="Resolve DNS records for example.com",
         available_tools=[{"name": "dns_lookup", "description": "Resolve DNS records"}],
@@ -177,7 +193,7 @@ async def test_function_calling_and_tool_gateway_validation():
     assert isinstance(proposed, ProposedToolCall)
     assert proposed.tool_name == "dns_lookup"
 
-    # Step 2: Validate against ToolGateway (allowlisted tool succeeds)
+    # Step 3: Validate against ToolGateway (allowlisted tool succeeds)
     result = await tool_gateway.execute_tool(
         tool_id=proposed.tool_name,
         arguments={"target": "example.com", "record_type": "A"},
@@ -185,7 +201,7 @@ async def test_function_calling_and_tool_gateway_validation():
     assert result["status"] == "success"
     assert "records" in result
 
-    # Step 3: Arbitrary shell execution strictly rejected (AC-SEC-01)
+    # Step 4: Arbitrary shell execution strictly rejected (AC-SEC-01)
     with pytest.raises(HTTPException) as exc_info:
         await tool_gateway.execute_tool(
             tool_id="dns_lookup",
@@ -195,7 +211,7 @@ async def test_function_calling_and_tool_gateway_validation():
     assert exc_info.value.status_code == 400
     assert "Arbitrary shell execution is forbidden" in exc_info.value.detail
 
-    # Step 4: Unregistered tool rejected
+    # Step 5: Unregistered tool rejected
     with pytest.raises(HTTPException) as exc_info2:
         await tool_gateway.execute_tool(
             tool_id="unregistered_tool",

@@ -1,9 +1,15 @@
+import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from sqlalchemy import text
 
 from app.core.config import settings
+from app.core.database import async_session_factory
+from app.core.safe_mode import safe_mode_controller
+from app.ai.model_registry import registry
 from app.api.v1.auth import router as auth_router
 from app.api.v1.health import router as health_router
 from app.api.v1.investigations import router as investigations_router
@@ -11,13 +17,62 @@ from app.api.v1.tools import router as tools_router
 from app.api.v1.admin_tools import router as admin_tools_router
 from app.api.v1.admin_users import router as admin_users_router
 
+logger = logging.getLogger("zaprica.startup")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Safe Startup Lifecycle:
+    1. Start normally.
+    2. Read-only database health check.
+    3. Initialize AI provider configuration without executing AI tasks.
+    4. Set Main Head, Browser Head, Terminal Head to IDLE state.
+    5. Set all worker execution to DISABLED.
+    6. Ensure terminal execution is disabled by default.
+    7. No automated background jobs or tool installs.
+    """
+    logger.info("Initializing ZAPRICA in Safe Startup Mode (ZAPRICA_SAFE_MODE=%s)...", settings.ZAPRICA_SAFE_MODE)
+
+    # 1. Read-only database connectivity verification
+    try:
+        async with async_session_factory() as session:
+            await session.execute(text("SELECT 1"))
+        logger.info("[Safe Startup] Database health check passed (read-only verification).")
+    except Exception as e:
+        logger.error("[Safe Startup] Database connection check failed: %s", e)
+
+    # 2. AI Brain Provider Initialization (passive config only, no automatic task execution)
+    try:
+        active_provider = registry.get_provider()
+        logger.info("[Safe Startup] AI Provider configured: %s (Passive readiness)", active_provider.__class__.__name__)
+    except Exception as e:
+        logger.warning("[Safe Startup] AI Provider config warning: %s", e)
+
+    # 3. Agent States: IDLE, Workers: DISABLED
+    safe_mode_controller.set_agent_state("main_head", "IDLE")
+    safe_mode_controller.set_agent_state("browser_head", "IDLE")
+    safe_mode_controller.set_agent_state("terminal_head", "IDLE")
+    safe_mode_controller.set_workers_state("DISABLED")
+
+    logger.info(
+        "[Safe Startup] Agents initialized in IDLE state. Workers DISABLED. Terminal Execution: %s",
+        safe_mode_controller.is_terminal_execution_enabled,
+    )
+
+    yield
+
+    logger.info("ZAPRICA application shutdown completed.")
+
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version="0.1.0",
-    description="ZAPRICA AI-powered OSINT Investigation Platform API",
+    description="ZAPRICA AI-powered OSINT Investigation Platform API with Safe Startup Mode",
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url=f"{settings.API_V1_STR}/docs",
     redoc_url=f"{settings.API_V1_STR}/redoc",
+    lifespan=lifespan,
 )
 
 # CORS configuration for frontend
@@ -63,5 +118,7 @@ async def root():
         "name": settings.PROJECT_NAME,
         "version": "0.1.0",
         "status": "operational",
-        "docs": f"{settings.API_V1_STR}/docs"
+        "safe_mode": safe_mode_controller.is_safe_mode,
+        "terminal_execution": safe_mode_controller.is_terminal_execution_enabled,
+        "docs": f"{settings.API_V1_STR}/docs",
     }

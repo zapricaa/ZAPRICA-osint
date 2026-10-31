@@ -138,13 +138,12 @@ class AuthService:
         # Audit Event
         audit = AuditEvent(
             workspace_id=workspace.id,
-            actor_id=admin_user.id,
+            actor_id=str(admin_user.id),
             actor_type="user",
-            event_type="system_bootstrap",
-            target_type="user",
-            target_id=str(admin_user.id),
-            ip_address=ip_address,
-            details_json={"username": admin_user.username, "role": "SUPER_ADMIN"},
+            action="system_bootstrap",
+            resource_type="user",
+            resource_id=admin_user.id,
+            metadata_redacted={"username": admin_user.username, "role": "SUPER_ADMIN"},
         )
         session.add(audit)
         await session.commit()
@@ -238,18 +237,18 @@ class AuthService:
             session.add(membership)
 
         # Audit Event
-        session.add(
-            AuditEvent(
-                workspace_id=ws_id,
-                actor_id=creator.id,
-                actor_type="user",
-                event_type="user_created",
-                target_type="user",
-                target_id=str(new_user.id),
-                ip_address=ip_address,
-                details_json={"username": new_user.username, "assigned_role": data.role},
+        if ws_id:
+            session.add(
+                AuditEvent(
+                    workspace_id=ws_id,
+                    actor_id=str(creator.id),
+                    actor_type="user",
+                    action="user_created",
+                    resource_type="user",
+                    resource_id=new_user.id,
+                    metadata_redacted={"username": new_user.username, "assigned_role": data.role},
+                )
             )
-        )
         await session.commit()
         return new_user, data.role
 
@@ -290,18 +289,18 @@ class AuthService:
         )
         session.add(invitation)
 
-        session.add(
-            AuditEvent(
-                workspace_id=data.workspace_id,
-                actor_id=creator.id,
-                actor_type="user",
-                event_type="invitation_created",
-                target_type="invitation",
-                target_id=str(invitation.id),
-                ip_address=ip_address,
-                details_json={"email": invitation.email, "role": data.role},
+        if data.workspace_id:
+            session.add(
+                AuditEvent(
+                    workspace_id=data.workspace_id,
+                    actor_id=str(creator.id),
+                    actor_type="user",
+                    action="invitation_created",
+                    resource_type="invitation",
+                    resource_id=invitation.id,
+                    metadata_redacted={"email": invitation.email, "role": data.role},
+                )
             )
-        )
         await session.commit()
 
         return InvitationOut(
@@ -393,13 +392,12 @@ class AuthService:
         session.add(
             AuditEvent(
                 workspace_id=workspace.id,
-                actor_id=new_user.id,
+                actor_id=str(new_user.id),
                 actor_type="user",
-                event_type="invitation_accepted",
-                target_type="user",
-                target_id=str(new_user.id),
-                ip_address=ip_address,
-                details_json={"email": new_user.email, "username": new_user.username},
+                action="invitation_accepted",
+                resource_type="user",
+                resource_id=new_user.id,
+                metadata_redacted={"email": new_user.email, "username": new_user.username},
             )
         )
         await session.commit()
@@ -622,15 +620,23 @@ class AuthService:
             for s in active_sessions:
                 s.revoked_at = datetime.now(timezone.utc)
 
+        # Fetch admin workspace
+        admin_membership = await session.scalar(
+            select(WorkspaceMembership).where(
+                and_(WorkspaceMembership.user_id == admin.id, WorkspaceMembership.status == "active")
+            )
+        )
+        ws_id = admin_membership.workspace_id if admin_membership else uuid.uuid4()
+
         session.add(
             AuditEvent(
-                actor_id=admin.id,
+                workspace_id=ws_id,
+                actor_id=str(admin.id),
                 actor_type="user",
-                event_type="user_status_changed",
-                target_type="user",
-                target_id=str(target_user_id),
-                ip_address=ip_address,
-                details_json={"new_status": new_status, "reason": reason},
+                action="user_status_changed",
+                resource_type="user",
+                resource_id=target_user_id,
+                metadata_redacted={"new_status": new_status, "reason": reason},
             )
         )
         await session.commit()

@@ -16,6 +16,7 @@ from app.models.reports import AuditEvent
 from app.models.sessions import LoginAttempt, Session
 from app.models.tools import Tool
 from app.models.users import User
+from app.core.safe_mode import safe_mode_controller
 from app.schemas.auth import (
     AdminUserCreateRequest,
     AdminUserRoleUpdateRequest,
@@ -437,3 +438,80 @@ async def grant_tool_permission(
 
     await db.commit()
     return {"message": f"Permission for tool '{tool.name}' granted to user '{target_user.username}'."}
+
+
+# -----------------------------------------------------------------------------
+# Safe Startup Mode Management
+# -----------------------------------------------------------------------------
+
+@router.get(
+    "/safe-mode",
+    summary="Get Safe Startup Mode status and agent states",
+    dependencies=[Depends(require_system_role(["SUPER_ADMIN", "ADMINISTRATOR"]))],
+)
+async def get_safe_mode_status():
+    """Returns safe startup flags, agent idle states, and execution policies."""
+    return safe_mode_controller.get_status()
+
+
+@router.post(
+    "/safe-mode/terminal-execution",
+    summary="Administrator toggle for terminal execution capability",
+    dependencies=[Depends(require_system_role(["SUPER_ADMIN"]))],
+)
+async def toggle_terminal_execution(
+    enabled: bool = Query(...),
+    reason: str = Query("Admin activation of approved CLI adapters", min_length=5),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Explicitly enable or disable terminal execution capabilities."""
+    if enabled:
+        safe_mode_controller.enable_terminal_execution(current_user.username, reason)
+    else:
+        safe_mode_controller.disable_terminal_execution(current_user.username)
+
+    # Log security audit event
+    db.add(
+        AuditEvent(
+            actor_id=current_user.id,
+            actor_type="user",
+            event_type="terminal_execution_toggled",
+            target_type="system",
+            target_id="terminal_gateway",
+            details_json={"enabled": enabled, "reason": reason},
+        )
+    )
+    await db.commit()
+
+    return {
+        "terminal_execution_enabled": safe_mode_controller.is_terminal_execution_enabled,
+        "message": f"Terminal execution has been {'enabled' if enabled else 'disabled'}.",
+    }
+
+
+@router.post(
+    "/safe-mode/toggle",
+    summary="Toggle safe mode globally",
+    dependencies=[Depends(require_system_role(["SUPER_ADMIN"]))],
+)
+async def toggle_safe_mode(
+    enabled: bool = Query(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Toggle safe mode globally."""
+    safe_mode_controller.set_safe_mode(enabled, current_user.username)
+    db.add(
+        AuditEvent(
+            actor_id=current_user.id,
+            actor_type="user",
+            event_type="safe_mode_toggled",
+            target_type="system",
+            target_id="safe_mode_controller",
+            details_json={"enabled": enabled},
+        )
+    )
+    await db.commit()
+    return safe_mode_controller.get_status()
+
