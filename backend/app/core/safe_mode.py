@@ -93,3 +93,4 @@ class SafeModeController:
 
 # Global safe mode controller singleton
 safe_mode_controller = SafeModeController()
+

@@ -65,11 +65,10 @@ export function Sidebar() {
             <Link
               key={item.name}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                isActive
-                  ? "bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-sm"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/80"
-              }`}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive
+                ? "bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-sm"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/80"
+                }`}
             >
               <Icon className={`w-4 h-4 ${isActive ? "text-blue-400" : "text-slate-400"}`} />
               {item.name}
