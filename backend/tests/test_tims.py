@@ -36,12 +36,13 @@ async def client(test_db_session: AsyncSession):
 @pytest.fixture
 async def admin_headers(client: AsyncClient):
     reg_payload = {
+        "username": "admin_operator",
         "email": "admin@example.com",
         "display_name": "Admin Operator",
-        "password": "AdminPassword123!",
+        "password": "AdminPassword123!@#",
         "workspace_name": "SecOps Core"
     }
-    resp = await client.post("/v1/auth/register", json=reg_payload)
+    resp = await client.post("/v1/auth/bootstrap", json=reg_payload)
     data = resp.json()
     token = data["access_token"]
     ws_id = data["user"]["memberships"][0]["workspace_id"]

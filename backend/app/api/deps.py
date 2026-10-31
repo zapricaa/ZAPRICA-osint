@@ -33,42 +33,7 @@ async def get_current_user(
     """
     user_id: Optional[uuid.UUID] = None
 
-    # 1. Check HttpOnly Session Cookie first
-    if session_token:
-        token_hash = hash_session_token(session_token)
-        sess_stmt = (
-            select(Session)
-            .where(Session.session_token_hash == token_hash)
-            .options(
-                selectinload(Session.user)
-                .selectinload(User.user_roles)
-                .selectinload(UserRole.role),
-                selectinload(Session.user)
-                .selectinload(User.memberships)
-                .selectinload(WorkspaceMembership.workspace),
-            )
-        )
-        db_session = await db.scalar(sess_stmt)
-        if db_session and db_session.is_active:
-            db_session.last_active_at = datetime.now(timezone.utc)
-            await db.commit()
-            user = db_session.user
-            if user.status != "active":
-                # Immediately revoke session
-                db_session.revoked_at = datetime.now(timezone.utc)
-                await db.commit()
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Account is {user.status}. Contact your administrator.",
-                )
-            if user.is_locked:
-                raise HTTPException(
-                    status_code=status.HTTP_423_LOCKED,
-                    detail="Account is temporarily locked due to excessive failed attempts.",
-                )
-            return user
-
-    # 2. Check Bearer Authorization Header
+    # 1. Check Bearer Authorization Header first (explicit client header takes precedence)
     if credentials and credentials.credentials:
         token_str = credentials.credentials
         # Check if the bearer token is a raw session token or a JWT
@@ -103,6 +68,41 @@ async def get_current_user(
                 user_id = uuid.UUID(payload["sub"])
             except (ValueError, TypeError):
                 pass
+
+    # 2. Check HttpOnly Session Cookie if no Bearer credentials provided
+    elif session_token:
+        token_hash = hash_session_token(session_token)
+        sess_stmt = (
+            select(Session)
+            .where(Session.session_token_hash == token_hash)
+            .options(
+                selectinload(Session.user)
+                .selectinload(User.user_roles)
+                .selectinload(UserRole.role),
+                selectinload(Session.user)
+                .selectinload(User.memberships)
+                .selectinload(WorkspaceMembership.workspace),
+            )
+        )
+        db_session = await db.scalar(sess_stmt)
+        if db_session and db_session.is_active:
+            db_session.last_active_at = datetime.now(timezone.utc)
+            await db.commit()
+            user = db_session.user
+            if user.status != "active":
+                # Immediately revoke session
+                db_session.revoked_at = datetime.now(timezone.utc)
+                await db.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Account is {user.status}. Contact your administrator.",
+                )
+            if user.is_locked:
+                raise HTTPException(
+                    status_code=status.HTTP_423_LOCKED,
+                    detail="Account is temporarily locked due to excessive failed attempts.",
+                )
+            return user
 
     if not user_id:
         raise HTTPException(

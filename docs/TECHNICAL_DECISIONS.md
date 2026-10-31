@@ -44,3 +44,24 @@
 - **Context:** The frontend needs live investigation progress, agent status, and worker logs without aggressive polling.
 - **Decision:** Implement FastAPI SSE streaming at `/v1/investigations/{investigationId}/events` backed by an in-memory or Redis-backed PubSub event bus.
 - **Consequences:** Satisfies `docs/API_SPEC.yaml` `/events` endpoint, provides responsive UI updates, and eliminates polling overhead.
+
+---
+
+## TDR-007: Official Google Gen AI SDK (`google-genai`) & Structured Pydantic Reasoning
+- **Context:** System requires advanced AI reasoning across Main Head, Browser Head, and Terminal Head.
+- **Decision:** Adopt official `google-genai` >= 2.3.0 SDK using `genai.Client()`. Use `gemini-3.8-flash` for high-fidelity supervisor reasoning and `gemini-3.5-flash-lite` for high-throughput sub-heads. Disallow deprecated legacy SDKs (`google-generativeai`) and older model families.
+- **Consequences:** Provides native `response_schema` enforcement, prompt injection `<untrusted_data>` segregation, rate-limit backoff, and model role configurability.
+
+---
+
+## TDR-008: Invite-Only Authentication & Session Management
+- **Context:** ZAPRICA must prevent public signups and anonymous accounts, enforcing administrative onboarding and MFA.
+- **Decision:** Implement zero public registration. Super admin is bootstrapped once via `/v1/auth/bootstrap`. Subsequent users are provisioned directly or onboarded via single-use cryptographically hashed invitation links (`invitations` table). Passwords hashed using Argon2id via `pwdlib`. MFA implemented using TOTP via `pyotp`. Sessions tracked in `sessions` table and delivered via HttpOnly cookies.
+- **Consequences:** Fulfills invite-only platform security, eliminates rogue self-registration, and provides immediate session revocation upon suspension.
+
+---
+
+## TDR-009: Safe Application Startup Mode (Default-Disabled Terminal Execution)
+- **Context:** Uncontrolled agent execution on Windows host risks arbitrary code execution or unapproved active OSINT touches.
+- **Decision:** Enable Safe Startup Mode by default (`ZAPRICA_SAFE_MODE=true`, `TERMINAL_EXECUTION_ENABLED=false`). Agents start in `IDLE` state; workers start `DISABLED`. Outbound CLI tool execution fails closed unless a Super Admin explicitly enables execution capabilities via `/v1/admin/safe-mode/terminal-execution`.
+- **Consequences:** Host safety is guaranteed out-of-the-box, background tasks cannot fire unprompted on boot, and administrators hold total control over tool capabilities.

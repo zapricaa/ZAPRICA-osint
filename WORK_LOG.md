@@ -2,183 +2,90 @@
 
 **Current Timestamp:** 2026-10-31  
 **Project Role:** Principal Software Architect, Senior Full-Stack Engineer, AI Agent Engineer, Database Architect, DevSecOps Engineer, QA Engineer  
-**Status:** In Active Development (Phase 3: Authentication, RBAC & Workspaces)
+**Status:** In Active Development (Phase 4: Frontend UI & E2E Integration)
 
 ---
 
 ## 1. Executive Summary & Current State
 
 ZAPRICA is an enterprise-grade, multi-agent AI-powered OSINT investigation platform built with:
-- **Backend:** FastAPI, Pydantic 2.x, SQLAlchemy 2.0 (async), Alembic, PyJWT/Bcrypt, LangGraph multi-agent state orchestration.
-- **Frontend:** Next.js 14 App Router, TypeScript (strict), Tailwind CSS, Lucide icons, Dark cyber investigation design.
-- **Agent Architecture:** 3-Tier Hierarchy (Main Head Supervisor -> Browser Head & Terminal Head Sub-Heads -> Specialist & Deterministic Processing Workers).
+- **Backend:** FastAPI, Pydantic 2.x, SQLAlchemy 2.0 (async), Alembic, Argon2id (`pwdlib`), TOTP MFA (`pyotp`), LangGraph multi-agent state orchestration.
+- **AI Brain:** Official Google Gen AI Python SDK (`google-genai` >= 2.3.0) + LangGraph, structured Pydantic outputs, configurable model registry (`gemini-3.8-flash`, `gemini-3.5-flash-lite`), prompt injection `<untrusted_data>` containment guardrails, TIMS function-calling integration.
+- **Invite-Only Security & RBAC:** Zero public registration, one-time Super Admin bootstrap, cryptographically secure invitation links, Argon2id hashing, HttpOnly session cookies, brute-force lockout, failed login auditing.
+- **Safe Application Startup Mode:** Default `ZAPRICA_SAFE_MODE=true`, `TERMINAL_EXECUTION_ENABLED=false`, `AUTO_INVESTIGATION_ENABLED=false`, `AUTO_TOOL_INSTALLATION=false`, read-only startup health check, passive AI readiness, agents IDLE, workers DISABLED.
+- **Multi-Agent Architecture:** 3-Tier Hierarchy (Main Head Supervisor -> Browser Head & Terminal Head Sub-Heads -> Specialist & Deterministic Processing Workers).
 - **Extensibility:** TIMS (Tool Intelligence & Management System) with sandboxed tool validation, playbooks, and administrator approval gates.
-- **Security & Privacy:** SSRF egress firewalls, isolated browser contexts, non-root CLI adapters, SHA-256 evidence immutability, RBAC, and append-only audit logging.
+- **Frontend:** Next.js 14 App Router, TypeScript (strict), Tailwind CSS, Lucide icons, Dark cyber investigation design.
+
+**Test Baseline:** 35 passing tests in 8.37s (`pytest backend/tests`).
 
 ---
 
 ## 2. What Has Been Done (Completed Work)
 
 ### Phase 0: Repository Inspection & Architectural Alignment
-- [x] Conducted exhaustive inspection of all blueprint documents:
-  - `.cursorrules`, `README.md`, `CONTRIBUTING.md`
-  - `docs/PRD.md`, `docs/ARCHITECTURE.md`, `docs/DATABASE_SCHEMA.md`
-  - `docs/API_SPEC.yaml`, `docs/SECURITY.md`, `docs/ACCEPTANCE_CRITERIA.md`, `docs/DEPLOYMENT.md`
-- [x] Identified environment capabilities:
-  - Python 3.13.1, Pip 26.1.1, Node.js v24.14.0, npm 11.9.0 on Windows.
-- [x] Established Technical Decisions Record (`docs/TECHNICAL_DECISIONS.md`):
-  - TDR-001: Modular Monolith (`backend/` + `frontend/`)
-  - TDR-002: Dialect-Agnostic SQLAlchemy 2.0 (PostgreSQL prod + fast SQLite hermetic test runner)
-  - TDR-003: Pluggable Evidence Storage (Local filesystem dev + S3/MinIO prod)
-  - TDR-004: Configurable LLM Provider Interface & Prompt Injection Defense
-  - TDR-005: Sandboxed Tool Execution & SSRF Egress Filter
-  - TDR-006: Server-Sent Events (SSE) for Real-Time Monitoring
-- [x] Created Progress Tracking Documents:
-  - `docs/IMPLEMENTATION_STATUS.md`
-  - `docs/DEVELOPMENT_LOG.md`
-  - `docs/TECHNICAL_DECISIONS.md`
-  - `docs/TODO.md`
-  - `WORK_LOG.md` (this master log)
+- [x] Conducted exhaustive inspection of all blueprint documents.
+- [x] Established Technical Decisions Record (`docs/TECHNICAL_DECISIONS.md`): TDR-001 through TDR-009.
+- [x] Created Progress Tracking Documents (`docs/IMPLEMENTATION_STATUS.md`, `docs/DEVELOPMENT_LOG.md`, `docs/TODO.md`, `WORK_LOG.md`, `SYSTEM_ARCHITECTURE_FLOW.md`).
 
 ### Phase 1: Project Setup & Foundation
-- [x] Root configuration & environment templates:
-  - Created `.env.example`
-  - Created `.gitignore`
-- [x] Backend scaffolding:
-  - Created `backend/pyproject.toml` and `backend/requirements.txt`
-  - Created isolated virtual environment in `backend/.venv`
-  - Installed all dependencies: `fastapi`, `uvicorn`, `pydantic`, `pydantic-settings`, `sqlalchemy 2.1.6`, `alembic`, `aiosqlite`, `asyncpg`, `pyjwt`, `bcrypt`, `playwright`, `httpx`, `pytest 9.2.0`, `pytest-asyncio`
-  - Verified package installation and Python 3.13 compatibility
-- [x] Frontend foundation:
-  - Created `frontend/package.json` (Next.js 14, React 18, Lucide, Tailwind CSS)
-  - Created `frontend/tsconfig.json` (strict TypeScript, path aliases `@/*`)
-  - Created `frontend/tailwind.config.ts`, `frontend/postcss.config.mjs`, `frontend/next.config.mjs`
-  - Created `frontend/src/app/globals.css` with dark cyber investigation theme
-  - Created `frontend/src/components/Sidebar.tsx` with full navigation matching all 16 required views
-  - Created `frontend/src/components/Navbar.tsx` with workspace and live status badges
-  - Created `frontend/src/app/layout.tsx`
+- [x] Root configuration & environment templates (`.env.example`, `.gitignore`).
+- [x] Backend scaffolding with Python 3.13 virtual environment (`backend/.venv`).
+- [x] Dependencies installed: `fastapi`, `uvicorn`, `pydantic`, `sqlalchemy 2.1.6`, `alembic`, `google-genai 2.34.0`, `pwdlib[argon2]`, `pyotp`, `playwright`, `httpx`, `pytest 9.2.0`.
+- [x] Frontend foundation (`frontend/package.json`, `tsconfig.json`, `tailwind.config.ts`, `globals.css`, `Sidebar.tsx`, `Navbar.tsx`, `layout.tsx`).
 
 ### Phase 2: Database Models & Persistence Engine
-- [x] Core database configuration & engine:
-  - Created `backend/app/core/config.py` (Settings with Pydantic BaseSettings)
-  - Created `backend/app/core/database.py` (Async engine, sessionmaker, GUID type decorator, JSON type)
-  - Created `backend/app/core/security.py` (Bcrypt password hashing, JWT generation/decoding)
-  - Created `backend/app/core/events.py` (PubSub EventBus with Server-Sent Events formatting)
-- [x] SQLAlchemy 2.0 Database Models implemented:
-  - `backend/app/models/workspaces.py` (`Workspace`, `WorkspaceMembership`)
-  - `backend/app/models/users.py` (`User`)
-  - `backend/app/models/investigations.py` (`Investigation`, `InvestigationScope`)
-  - `backend/app/models/tasks.py` (`Task`, `AgentRun`, `ToolRun`)
-  - `backend/app/models/tools.py` (`Tool`, `ToolVersion`, `AgentToolAssignment`)
-  - `backend/app/models/evidence.py` (`EvidenceArtifact`, `Finding`, `FindingSource`)
-  - `backend/app/models/entities.py` (`Entity`, `EntityRelationship`)
-  - `backend/app/models/reports.py` (`Report`, `ApprovalRequest`, `AuditEvent`)
-  - `backend/app/models/__init__.py` exporting all models
-- [x] Database Migrations & Validation:
-  - Configured `backend/alembic/env.py` and `script.py.mako`
-  - Generated initial schema migration `e6a84b76cd97_initial_schema.py`
-  - Successfully executed `alembic upgrade head`
-  - Executed automated unit tests (`backend/tests/test_models.py` passing 100%)
+- [x] Database configuration (`app/core/database.py`, async engine, GUID, dialect-aware JSON).
+- [x] SQLAlchemy 2.0 Database Models (All 23 entities):
+  - `workspaces`, `workspace_memberships`
+  - `users`, `roles`, `permissions`, `user_roles`, `role_permissions`, `user_tool_permissions`
+  - `sessions`, `login_attempts`, `invitations`
+  - `investigations`, `investigation_scopes`
+  - `tasks`, `agent_runs`, `tool_runs`
+  - `tools`, `tool_versions`, `agent_tool_assignments`
+  - `evidence_artifacts`, `findings`, `finding_sources`
+  - `entities`, `entity_relationships`
+  - `reports`, `approval_requests`, `audit_events`
+- [x] Database Migrations (`e6a84b76cd97_initial_schema.py`, `4666980e15f4_invite_only_auth_and_rbac.py`).
+
+### Phase 3: Invite-Only Authentication & RBAC
+- [x] Registration policy: Public signup disabled; only admins can create accounts or issue invitations.
+- [x] One-time bootstrap endpoint (`/v1/auth/bootstrap`) creates first SUPER_ADMIN; subsequent calls fail with HTTP 403.
+- [x] Argon2id password hashing via `pwdlib` with bcrypt fallback.
+- [x] Multi-Factor Authentication (TOTP via `pyotp`): setup, QR provisioning URI, verification challenge.
+- [x] Secure session management (`sessions` table, SHA-256 token hashing, HttpOnly cookies, logout invalidation).
+- [x] Brute-force protection: `login_attempts` logging, 15-minute lockouts after 5 consecutive failed attempts.
+- [x] Administrator Dashboard endpoints (`/v1/admin/users`, `/v1/admin/invitations`, `/v1/admin/sessions`, `/v1/admin/login-attempts`, `/v1/admin/audit-logs`, `/v1/admin/tools/{id}/permissions`).
+
+### Phase 4: Google Gemini AI Brain (`backend/app/ai/`)
+- [x] Official SDK integration: `google-genai` >= 2.3.0 (`from google import genai`).
+- [x] Model Registry (`app/ai/model_registry.py`):
+  - Dynamic role-to-model mapping (`main_head` -> `gemini-3.8-flash`, `browser_head` -> `gemini-3.5-flash-lite`, `terminal_head` -> `gemini-3.5-flash-lite`).
+- [x] Provider Abstraction (`BaseLLMProvider`, `GoogleGeminiProvider`, `MockLLMProvider`).
+- [x] Structured Reasoning Schemas (`app/ai/schemas/reasoning.py`):
+  - `InvestigationObjectiveAnalysis`, `InvestigationPlanSchema`, `PlannedTaskSchema`, `BrowserTaskDecompositionSchema`, `TerminalTaskDecompositionSchema`, `ProposedToolCall`, `FindingsAnalysisSchema`, `FollowUpDecisionSchema`, `ExecutiveSummarySchema`.
+- [x] Prompt Injection Defense: `<untrusted_data>` wrapping and tag filtering in `app/ai/prompts/system_prompts.py`.
+- [x] High-level service (`app/ai/llm_service.py`) integrated into `MainHeadGraphRunner`.
+
+### Phase 5: Safe Application Startup Mode
+- [x] Safe mode flags: `ZAPRICA_SAFE_MODE=true`, `TERMINAL_EXECUTION_ENABLED=false`, `AUTO_INVESTIGATION_ENABLED=false`, `AUTO_TOOL_INSTALLATION=false`.
+- [x] `SafeModeController` (`app/core/safe_mode.py`):
+  - Read-only DB health check on startup.
+  - Passive AI configuration (no automated tasks).
+  - Agents initialized in `IDLE` state; workers `DISABLED`.
+  - Terminal execution blocked by default; administrator activation required.
+  - Fail closed: CLI tools never execute on Windows host.
+- [x] Admin endpoints: `/v1/admin/safe-mode`, `/v1/admin/safe-mode/terminal-execution`, `/v1/admin/safe-mode/toggle`.
 
 ---
 
-## 3. What Is Currently Being Worked On (In Progress)
+## 3. What Needs To Be Done Next (Immediate Roadmap)
 
-- [ ] **Phase 3: Authentication, RBAC & Workspaces**:
-  - Implement Pydantic Auth schemas (`UserCreate`, `UserLogin`, `TokenResponse`, `CurrentUserResponse`).
-  - Implement `AuthService` handling password hashing, credential verification, workspace assignment, and token issuance.
-  - Implement FastAPI dependency injection:
-    - `get_current_user`
-    - `get_current_workspace`
-    - `require_role(["admin", "investigator", ...])`
-  - Implement `/v1/auth/register`, `/v1/auth/login`, and `/v1/me` matching `docs/API_SPEC.yaml`.
-  - Write and execute automated tests for `AC-AUTH-01`, `AC-AUTH-02`, `AC-AUTH-03`, `AC-AUTH-04`.
-
----
-
-## 4. What Remains To Be Done (Detailed Roadmap)
-
-### Phase 4: Core REST API & Investigation Controls
-- [ ] Implement Pydantic API schemas matching `API_SPEC.yaml`
-- [ ] Implement `/v1/investigations` (list, create with scope)
-- [ ] Implement lifecycle actions (`/start`, `/pause`, `/resume`, `/cancel`)
-- [ ] Implement `/v1/investigations/{id}/tasks`, `/findings`, `/evidence`, `/reports`
-- [ ] Implement SSE endpoint `/v1/investigations/{id}/events`
-- [ ] Add tests for AC-INV-01, AC-INV-02, AC-INV-03, AC-INV-04
-
-### Phase 5: Evidence Storage & Deterministic Processing Workers
-- [ ] Implement `backend/app/storage/` (StorageBackend abstraction, LocalStorageBackend, S3StorageBackend)
-- [ ] Enforce SHA-256 hash calculation, size checks, and immutability
-- [ ] Implement deterministic Python processors:
-  - `clean_html_content`
-  - `normalize_identifiers` (URLs, emails, domain names, usernames)
-  - `deduplicate_findings` (exact and fuzzy deduplication preserving raw originals)
-  - `classify_findings` (categorization into domain info, network, contact, metadata)
-- [ ] Add tests for AC-EVD-01, AC-EVD-02, AC-EVD-03, AC-EVD-04
-
-### Phase 6: Main Head AI Agent (LangGraph Orchestration)
-- [ ] Implement agent state graph using LangGraph:
-  - `parse_request`: analyzes user intent, determines target & objective
-  - `scope_gate`: deterministic authorization check against `InvestigationScope`
-  - `plan`: constructs structured investigation plan
-  - `decompose`: creates typed tasks with budget and allowed tools
-  - `route`: dispatches to Browser Head or Terminal Head
-  - `monitor`: tracks task execution, timeouts, errors
-  - `consolidate`: aggregates findings packages from Sub-Heads
-  - `evaluate_gaps`: determines if objective is satisfied
-  - `replan`: creates bounded follow-up tasks without expanding scope
-  - `report`: generates final investigation synthesis
-- [ ] Implement configurable LLM adapter (MockLLM for tests, Gemini, OpenAI)
-- [ ] Add tests for AC-MAIN-01 through AC-MAIN-04
-
-### Phase 7: Browser Head Agent & Playwright Workers
-- [ ] Implement Browser Head supervisor
-- [ ] Implement Playwright worker with isolated browser contexts
-- [ ] Implement SSRF Egress Filter:
-  - DNS resolution check blocking loopback (`127.0.0.1`), RFC1918 private subnets, link-local (`169.254.169.254`), cloud metadata
-  - Redirect revalidation
-- [ ] Extract page metadata (title, meta tags, headers, links, tech indicators, text)
-- [ ] Store raw HTML snapshot in evidence storage
-- [ ] Add tests for AC-AGENT-01, AC-AGENT-02, AC-SEC-02
-
-### Phase 8: Terminal Head Agent & Sandboxed CLI Adapters
-- [ ] Implement Terminal Head supervisor
-- [ ] Implement Tool Gateway with strict Pydantic argument schemas (NO arbitrary shell strings)
-- [ ] Implement allowlisted CLI adapters:
-  - `whois_lookup`
-  - `dns_lookup`
-  - `ping_check`
-  - `metadata_extract`
-- [ ] Enforce timeout and resource limits
-- [ ] Add tests for AC-SEC-01, AC-SEC-04
-
-### Phase 9: TIMS (Tool Intelligence & Management System)
-- [ ] Implement tool registry CRUD & draft creation (`/v1/admin/tools`)
-- [ ] Implement playbook markdown generation & documentation storage
-- [ ] Implement isolated tool test runner (`/validate`)
-- [ ] Implement admin approval workflow (`/approve`, `/publish`, `/disable`, `/activate-version`)
-- [ ] Implement capability discovery filtering by agent class
-- [ ] Add tests for AC-TIMS-01 through AC-TIMS-07
-
-### Phase 10: Findings Correlation & Report Service
-- [ ] Implement cross-source conflict detection and entity graph builder
-- [ ] Implement Report Service generating structured findings summaries with provenance links
-- [ ] Implement JSON, CSV, and Markdown export endpoints
-- [ ] Add tests for AC-REPORT-01 through AC-REPORT-04
-
-### Phase 11: Frontend Interactive UI Pages
-- [ ] Build Authentication views (`/login`, `/register`)
-- [ ] Build Main Dashboard (`/dashboard`)
-- [ ] Build New Investigation form (`/investigations/new`)
-- [ ] Build Investigation Workspace (`/investigations/[id]`) with live SSE progress, task graph, findings list
-- [ ] Build Evidence Explorer (`/evidence`)
-- [ ] Build Tool Manager (TIMS) (`/tools`)
-- [ ] Build Reports viewer & export (`/reports`)
-
-### Phase 12: End-to-End Verification & Acceptance Testing
-- [ ] Run full automated test suite verifying all 34 acceptance criteria
-- [ ] Execute End-to-End Authorized Website Investigation scenario
-
-### Phase 13: Packaging & Deployment Runbook
-- [ ] Finalize Dockerfiles and `docker-compose.yml`
-- [ ] Verify production deployment readiness checklist
+1. **Frontend Dashboard & View Implementation (`frontend/src/app/`):**
+   - Connect frontend to backend REST endpoints and SSE `/events`.
+   - Build `/login`, `/dashboard`, `/investigations`, `/investigations/[id]`, `/evidence`, `/tools`, `/reports`, `/admin`.
+2. **Containerization & Deployment:**
+   - Dockerfile for Backend and Frontend.
+   - `docker-compose.yml` for unified local stack.
+3. **Documentation Sync:**
+   - Update `PRD.md`, `SECURITY.md`, `DATABASE_SCHEMA.md`, `API_SPEC.yaml`, `ACCEPTANCE_CRITERIA.md`.

@@ -1,6 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -110,6 +110,18 @@ app.include_router(investigations_router, prefix=settings.API_V1_STR, tags=["Inv
 app.include_router(tools_router, prefix=settings.API_V1_STR, tags=["Tools"])
 app.include_router(admin_tools_router, prefix=settings.API_V1_STR, tags=["Administration", "Tools"])
 app.include_router(admin_users_router, prefix=settings.API_V1_STR, tags=["Administration", "Users"])
+
+from app.api.deps import get_current_user
+from app.services.auth_service import AuthService
+from app.schemas.auth import CurrentUserOut
+from app.models.users import User
+from app.core.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+@app.get(f"{settings.API_V1_STR}/me", response_model=CurrentUserOut, tags=["Identity"])
+async def me_shortcut(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return await AuthService.get_current_user_profile(db, current_user.id)
 
 
 @app.get("/")

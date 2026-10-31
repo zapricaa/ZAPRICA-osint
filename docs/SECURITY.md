@@ -35,11 +35,15 @@ Objectives:
 
 ## 3. Identity and authorization
 
-- Use a vetted identity provider or secure password authentication; do not implement custom cryptography.
-- Passwords, if locally managed, must be hashed with a current password hashing algorithm such as Argon2id using a maintained library. Never encrypt or store plaintext passwords.
-- Use short-lived access tokens, refresh-token rotation/revocation, secure HttpOnly cookies where appropriate, CSRF protection for cookie-authenticated state-changing requests, and TLS.
-- Support MFA for administrators and privileged users.
-- Roles: `admin`, `investigator`, `reviewer`, `viewer`; permissions are enforced server-side.
+- **Invite-Only Registration Policy**: ZAPRICA strictly prohibits public self-registration. No anonymous signups or open registration endpoints exist.
+- **One-Time Bootstrap**: The initial `SUPER_ADMIN` account is provisioned via a dedicated bootstrap endpoint (`/v1/auth/bootstrap`) that executes only once when the system contains zero users. Subsequent calls are permanently rejected (HTTP 403).
+- **Administrative Provisioning & Invitations**: New users are provisioned directly by administrators or onboarded using single-use, cryptographically hashed invitation links (`invitations` table) with a 7-day expiration window.
+- **Argon2id Password Hashing**: Passwords are hashed exclusively using the current Argon2id algorithm via `pwdlib` (`pwdlib[argon2]`), with bcrypt fallback verification for legacy credential migration.
+- **Multi-Factor Authentication (MFA)**: TOTP MFA is supported for all accounts and mandatory for administrators via `pyotp`. MFA secrets are base32-encoded, and logins require a 6-digit TOTP code.
+- **Session Security**: Sessions are tracked in the `sessions` table using SHA-256 token hashes and delivered via secure `HttpOnly`, `SameSite=Lax`, and `Secure` cookies. Explicit `Authorization: Bearer` headers take precedence for API integration.
+- **Brute-Force & Lockout Controls**: Failed logins are recorded in `login_attempts`. Accounts are locked out for 15 minutes after 5 consecutive failed attempts.
+- **Account Lifecycle & Revocation**: Accounts can transition between `active`, `suspended`, `disabled`, and `revoked`. Suspending or revoking an account immediately invalidates all active sessions in the database.
+- **Roles & Permissions**: System roles (`SUPER_ADMIN`, `ADMINISTRATOR`, `INVESTIGATOR`, `ANALYST`) and granular permissions (`users:create`, `tools:execute`, `reports:export`) are strictly enforced server-side.
 - Every request must authorize workspace membership and the specific resource/action. UUIDs are not authorization.
 - Service identities must be separate from user identities and narrowly scoped.
 - Tool approval, policy edits, scope changes, report finalization, and privileged access changes require audit events.
@@ -166,3 +170,27 @@ A release is blocked if any of the following is true:
 - CERT-In Directions (28 April 2022): https://cert-in.org.in/PDF/CERT-In_Directions_70B_28.04.2022.pdf
 - MeitY DPDP Rules, 2025: https://www.meity.gov.in/documents/act-and-policies/digital-personal-data-protection-rules-2025-gDOxUjMtQWa
 - DPDP Act enforcement timeline notification: https://www.meity.gov.in/documents/act-and-policies/digital-personal-data-protection-rules-2025-gDOxUjMtQWa?pageTitle=Digital-Personal-Data-Protection-Rules-2025
+
+---
+
+## 14. Safe Application Startup Mode
+
+ZAPRICA enforces a strict **Safe Startup Mode** enabled by default:
+
+- **Default Configuration**:
+  - `ZAPRICA_SAFE_MODE=true`
+  - `TERMINAL_EXECUTION_ENABLED=false`
+  - `AUTO_INVESTIGATION_ENABLED=false`
+  - `AUTO_TOOL_INSTALLATION=false`
+- **Application Boot Invariants**:
+  1. Frontend and backend initialize normally.
+  2. Database performs read-only health checks (`SELECT 1`). No unprompted migrations or schema alterations on boot.
+  3. AI Brain models are registered in passive readiness; no automatic reasoning or prompt execution triggers on startup.
+  4. Main Head, Browser Head, and Terminal Head agents load into `IDLE` state.
+  5. All worker processes remain `DISABLED`.
+  6. No automated browser navigation or terminal execution launches without explicit authenticated user requests.
+  7. No third-party OSINT tools install or execute automatically.
+  8. Background investigation queues remain stopped until explicitly started.
+- **Fail Closed Guarantee**:
+  - Outbound command execution via `ToolGateway` fails closed with HTTP 403 Forbidden unless an administrator explicitly enables terminal execution via `/v1/admin/safe-mode/terminal-execution`.
+  - Terminal CLI tools must never execute directly on the Windows host. If container isolation is unavailable, execution is immediately halted.

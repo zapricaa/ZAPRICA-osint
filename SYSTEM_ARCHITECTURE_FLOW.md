@@ -52,148 +52,152 @@ flowchart TD
     EVD_SRV <--> STORAGE
     TOOL_SRV <--> DB
     REP_SRV <--> DB
-    AUDIT --> DB
 
-    %% Multi-Agent System (3-Tier Hierarchy)
-    subgraph S4 ["Multi-Agent Orchestration Subsystem"]
-        MAIN["Main Head AI Agent (Supervisor - LangGraph)"]
-        BH["Browser Head Sub-Head Agent"]
-        TH["Terminal Head Sub-Head Agent"]
-        
-        %% Workers
-        BW["Browser Workers (Playwright Runtime)"]
-        TW["Terminal Workers (Sandboxed CLI Adapters)"]
-        
-        %% Deterministic Processors
-        DPROC["Deterministic Processing Pipeline\n(Clean • Normalize • Deduplicate • Classify)"]
+    %% 3-Tier Multi-Agent System
+    subgraph S4 ["Multi-Agent Architecture (LangGraph Orchestration)"]
+        MAIN["MAIN HEAD AI AGENT\n(Supervisor Graph Runner)"]
+        BROWSER_HEAD["BROWSER HEAD AGENT\n(Web Reconnaissance)"]
+        TERMINAL_HEAD["TERMINAL HEAD AGENT\n(Sandboxed CLI OSINT)"]
     end
 
-    INV_SRV --> |"Trigger on /start"| MAIN
-    MAIN --> |"Decompose into TaskEnvelopes"| BH
-    MAIN --> |"Decompose into TaskEnvelopes"| TH
+    INV_SRV --> |"Trigger LangGraph Execution"| MAIN
+    MAIN --> |"Task Envelope"| BROWSER_HEAD
+    MAIN --> |"Task Envelope"| TERMINAL_HEAD
 
-    BH --> |"Dispatch isolated browser task"| BW
-    TH --> |"Dispatch schema-validated CLI task"| TW
+    %% Workers
+    subgraph S5 ["Browser Workers & Data Processors"]
+        PW["Playwright HTTP & DOM Worker"]
+        SSRF["SSRF Egress Firewall"]
+        CLEAN_B["Data Cleaning & Normalization"]
+        DEDUP_B["Duplicate Detection"]
+    end
 
-    BW --> |"Raw HTML Snapshot & DOM Text"| EVD_SRV
-    TW --> |"Raw Tool STDOUT/STDERR"| EVD_SRV
+    BROWSER_HEAD --> SSRF
+    SSRF --> PW
+    PW --> CLEAN_B
+    CLEAN_B --> DEDUP_B
+    DEDUP_B --> |"FindingsPackage"| BROWSER_HEAD
 
-    BW --> |"Raw Output"| DPROC
-    TW --> |"Raw Output"| DPROC
+    subgraph S6 ["Terminal Workers & Data Processors"]
+        GATEWAY["Controlled Tool Gateway\n(Strictly NO arbitrary shell)"]
+        ADAPTERS["Approved Adapters\n(dns_lookup, whois_lookup, etc.)"]
+        CLEAN_T["Normalization & Classification"]
+        DEDUP_T["Duplicate Detection"]
+    end
 
-    DPROC --> |"Structured Derived Records"| EVD_SRV
-    DPROC --> |"WorkerResultEnvelope"| BH
-    DPROC --> |"WorkerResultEnvelope"| TH
+    TERMINAL_HEAD --> GATEWAY
+    GATEWAY --> ADAPTERS
+    ADAPTERS --> CLEAN_T
+    CLEAN_T --> DEDUP_T
+    DEDUP_T --> |"FindingsPackage"| TERMINAL_HEAD
 
-    BH --> |"Browser FindingsPackage"| MAIN
-    TH --> |"Terminal FindingsPackage"| MAIN
+    %% Evidence Pipeline
+    BROWSER_HEAD --> |"Raw Evidence Artifact + SHA-256"| EVD_SRV
+    TERMINAL_HEAD --> |"Raw Evidence Artifact + SHA-256"| EVD_SRV
+    BROWSER_HEAD --> |"Consolidated Findings"| MAIN
+    TERMINAL_HEAD --> |"Consolidated Findings"| MAIN
 
-    MAIN --> |"Correlate, Detect Conflicts & Synthesize"| REP_SRV
-    REP_SRV --> |"Final Traceable Report"| DB
+    MAIN --> |"Synthesize Report (Facts vs Inferences)"| REP_SRV
+    REP_SRV --> |"Final Intelligence Report"| DB
 ```
 
 ---
 
-## 2. The 3-Tier Agent Hierarchy & Communication Flow
-
-ZAPRICA rejects flat, unrestricted chatbot architecture in favor of a strictly structured **3-Tier Agent Hierarchy**. Agent communication never uses loose natural language prompts as the sole contract; all communication is typed, versioned, and validated with Pydantic envelopes.
+## 2. 3-Tier Agent Hierarchy & Decision Cycle
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Inv as Investigator
-    participant Main as Main Head Agent (Supervisor)
-    participant Scope as Deterministic Scope Gate
-    participant TIMS as Tool Registry (TIMS)
-    participant BH as Browser Head Agent
-    participant BW as Playwright Browser Worker
-    participant Proc as Deterministic Processors
-    participant Evd as Evidence Service
-    participant Rep as Report Service
+    actor Analyst as Investigator / Analyst
+    participant API as FastAPI Backend
+    participant MainHead as Main Head Agent (LangGraph)
+    participant ScopeGate as Scope & Permission Gate
+    participant BrowserHead as Browser Head Agent
+    participant TerminalHead as Terminal Head Agent
+    participant EvdService as Evidence & Provenance Service
+    participant Storage as Raw Object Storage
 
-    Inv->>Main: Request Investigation (Target: example.com)
-    Main->>Scope: Validate requested target & capability
-    Scope-->>Main: Scope Validated (Allowed: example.com, Op: public_website_metadata)
-    
-    Main->>TIMS: Discover active tools for "public_website_metadata"
-    TIMS-->>Main: Returns ToolVersion ID: "website_metadata.v1"
-    
-    Main->>Main: Decompose into TaskEnvelope
-    Main->>BH: Route TaskEnvelope (Assigned: browser_head)
-    
-    BH->>BW: Execute isolated Playwright Context
-    BW->>BW: SSRF Egress Filter: Resolve IP, block private/loopback/cloud metadata
-    BW->>BW: Fetch webpage & extract title, headers, links, tech indicators
-    
-    BW->>Evd: Store immutable Raw HTML (calculate SHA-256)
-    Evd-->>BW: Return EvidenceArtifact ID
-    
-    BW->>Proc: Send raw extracted snippets
-    Proc->>Proc: Clean HTML (strip scripts/styles)
-    Proc->>Proc: Normalize URLs, domains & emails
-    Proc->>Proc: Deduplicate against existing findings
-    Proc->>Proc: Classify finding type (e.g. tech_stack, contact)
-    
-    Proc->>Evd: Record Finding with Provenance Source link
-    Proc-->>BH: Return WorkerResultEnvelope
-    
-    BH-->>Main: Return FindingsPackage (Findings, Evidence IDs, Status)
-    Main->>Main: Check investigation completeness (Evaluate Gaps)
-    Main->>Rep: Generate Structured Investigation Report
-    Rep-->>Inv: Display in Workspace Dashboard (via SSE live update)
+    Analyst->>API: POST /v1/investigations (Target, Objective, Scope)
+    API->>MainHead: Initialize InvestigationState
+    MainHead->>ScopeGate: Validate Target against Allowed Scope & Policy
+    alt Target Denied / Out-of-Scope
+        ScopeGate-->>MainHead: Scope Violation (Halt with Error)
+        MainHead-->>API: Investigation Marked Failed (Event Published)
+    else Target Approved
+        ScopeGate-->>MainHead: Scope Verified (Allow Execution)
+        MainHead->>MainHead: Decompose Plan into Sub-Tasks (Pydantic Schemas)
+        
+        par Web Reconnaissance
+            MainHead->>BrowserHead: Dispatch TaskEnvelope (public_website_metadata)
+            BrowserHead->>BrowserHead: SSRF Filter (Block Private IPs/Loopback/Metadata)
+            BrowserHead->>BrowserHead: Fetch Web Page & Extract Metadata
+            BrowserHead->>EvdService: Store Raw HTML Payload
+            EvdService->>Storage: Persist Blob & Calculate SHA-256 Hash
+            Storage-->>EvdService: Storage URI & Digest
+            BrowserHead->>BrowserHead: Clean, Normalize, Deduplicate Data
+            BrowserHead-->>MainHead: Return FindingsPackage (Links to Evidence ID)
+        and Network Reconnaissance
+            MainHead->>TerminalHead: Dispatch TaskEnvelope (dns_lookup / whois_lookup)
+            TerminalHead->>TerminalHead: Reject Raw Shell Strings (Enforce Tool Adapters)
+            TerminalHead->>TerminalHead: Execute Tool Adapter in Isolation Container
+            TerminalHead->>EvdService: Store Raw DNS/WHOIS Output
+            EvdService->>Storage: Persist Blob & Calculate SHA-256 Hash
+            Storage-->>EvdService: Storage URI & Digest
+            TerminalHead->>TerminalHead: Clean, Normalize, Deduplicate Data
+            TerminalHead-->>MainHead: Return FindingsPackage (Links to Evidence ID)
+        end
+        
+        MainHead->>MainHead: Consolidate Cross-Source Findings & Deduplicate
+        MainHead->>MainHead: Detect Conflicts & Information Gaps
+        MainHead->>MainHead: Synthesize Report (Separate Facts vs Inferences)
+        MainHead->>API: Mark Completed & Publish SSE Events
+        API-->>Analyst: Live Dashboard Updates & Complete Report
+    end
 ```
 
 ---
 
 ## 3. Tool Intelligence & Management System (TIMS) Lifecycle
 
-New tools are added without changing core application or agent source code. A tool must pass through strict lifecycle states before being executable.
-
 ```mermaid
 stateDiagram-v2
-    [*] --> Draft: Admin registers tool metadata & manifest
-    Draft --> Testing: Submit for isolated test validation
-    Testing --> PendingReview: Automated tests pass in restricted container
-    Testing --> Rejected: Validation failure or policy violation
-    PendingReview --> Approved: Human Administrator signs approval
-    PendingReview --> Rejected: Admin rejects tool
-    Approved --> Published: Tool version published to Registry
-    Published --> ActiveExecution: Agent capability discovery matches tool
-    Published --> Disabled: Admin disables tool version
-    Disabled --> Published: Admin re-enables tool version
-    Published --> Revoked: Security issue identified
-    Revoked --> [*]: Permanent block on execution
+    [*] --> Draft: Administrator Submits Tool Manifest & Doc
+    Draft --> PlaybookGenerated: System Extracts Structured Playbook (JSON Schema)
+    PlaybookGenerated --> Validating: Run Automated Sandbox Test in Isolation
+    
+    state Validating {
+        [*] --> CheckSchema: Validate Parameter Constraints
+        CheckSchema --> CheckExecution: Execute in Non-Root Ephemeral Sandbox
+        CheckExecution --> CheckOutput: Verify Output Matches Expected Schema
+    }
+    
+    Validating --> Rejected: Validation Failed / Policy Violation
+    Validating --> PendingApproval: Validation Passed (Exit Code 0, Valid Schema)
+    
+    PendingApproval --> Approved: Super Admin Reviews and Approves
+    PendingApproval --> Rejected: Admin Denies Approval
+    
+    Approved --> Published: Assigned to Permitted Agents
+    Published --> Disabled: Admin Emergency Kill-Switch (Immediate Revocation)
+    Disabled --> Published: Admin Re-enables Tool
+    Published --> [*]
 ```
 
 ---
 
-## 4. Evidence Provenance & Immutability Chain
-
-Every insight shown to an investigator retains an unbroken chain of custody linked to raw artifacts:
+## 4. Evidence Integrity & Provenance Chain
 
 ```mermaid
 flowchart LR
-    subgraph Raw ["1. Immutable Raw Evidence"]
-        RAW_BYTES["Raw HTML / Network Packets / Output Bytes"]
-        HASH["SHA-256 Digest Calculation"]
-        RAW_BYTES --> HASH
-        HASH --> ARTIFACT["EvidenceArtifact Record\n(storage_uri, sha256, byte_size, collected_at)"]
-    end
-
-    subgraph Derivation ["2. Deterministic Derivation"]
-        ARTIFACT --> PROCESSORS["Data Cleaners & Normalizers"]
-        PROCESSORS --> DERIVED["Extracted Attributes\n(e.g., Server: nginx, Contact: info@target.com)"]
-    end
-
-    subgraph Provenance ["3. Finding & Provenance Linkage"]
-        DERIVED --> FINDING["Finding Record\n(title, normalized_value, summary, confidence)"]
-        FINDING --> SOURCE_LINK["FindingSource Record\n(finding_id, evidence_artifact_id, source_url, source_locator)"]
-        ARTIFACT -.-> SOURCE_LINK
-    end
-
-    subgraph Synthesis ["4. Final Report"]
-        FINDING --> REPORT["Report Section\n(Facts vs Inferences, Limitations, Source Citations)"]
-    end
+    RAW["Raw Collector Output (HTML, DNS, WHOIS)"] --> HASH["Compute SHA-256 Cryptographic Hash"]
+    HASH --> STORE["Immutable Object Storage (Local / S3)"]
+    STORE --> ARTIFACT["EvidenceArtifact Record\n(Storage URI, Hash, Timestamp, Collector)"]
+    
+    ARTIFACT --> SOURCE["FindingSource Join Table\n(Artifact ID, URL, Locator, Relationship)"]
+    SOURCE --> FINDING["Derived Finding Record\n(Type, Normalized Value, Confidence)"]
+    
+    FINDING --> ENTITY["Knowledge Graph Entity\n(Domain, IP, Org, Email, Person)"]
+    FINDING --> REPORT["Intelligence Report\n(Observed Facts vs Inferred Hypotheses)"]
 ```
 
 ---
@@ -220,20 +224,59 @@ flowchart TD
 
 ---
 
-## 6. Directory Structure Mapping
+## 6. Google Gemini AI Brain & Safe Startup Mode
 
-- `backend/app/core/`: Application settings, async database configuration, security (JWT/Bcrypt), event bus (SSE).
-- `backend/app/models/`: SQLAlchemy 2.0 async database models (19 tables spanning users, workspaces, investigations, tasks, tools, evidence, entities, reports, audit).
-- `backend/app/schemas/`: Pydantic 2.x request/response models conforming to `docs/API_SPEC.yaml`.
-- `backend/app/services/`: Pure business logic (`AuthService`, `InvestigationService`, `EvidenceService`, `ToolService`, `ReportService`).
-- `backend/app/storage/`: Pluggable evidence storage backends (`LocalStorageBackend`, `S3StorageBackend`).
-- `backend/app/agents/`:
-  - `contracts.py`: Typed envelopes for task dispatch, worker results, and findings packages.
-  - `main_head/`: LangGraph orchestration supervisor.
-  - `browser_head/`: Playwright supervisor and SSRF egress filter.
-  - `terminal_head/`: Sandboxed CLI tool execution supervisor.
-  - `workers/`: Web scrapers, CLI adapters, and deterministic data processors (`DataCleaner`, `DataNormalizer`, `DuplicateDetector`, `DataClassifier`).
-- `frontend/src/app/`: Next.js 14 App Router pages (Dashboard, Investigations Workspace, Evidence Explorer, Agent Center, Tool Manager, Reports, Settings).
-- `frontend/src/components/`: Reusable UI components (Sidebar, Navbar, Task Graph, Evidence Viewer).
-- `docs/`: Technical specifications, architecture invariants, and database contracts.
-- `WORK_LOG.md`: Master continuous execution tracker.
+```mermaid
+flowchart TD
+    subgraph STARTUP ["Application Startup Phase"]
+        BOOT["FastAPI Lifespan Startup"] --> DB_CHECK["1. Read-Only DB Health Check (SELECT 1)"]
+        DB_CHECK --> AI_INIT["2. Passive AI Provider Config (google-genai Client)"]
+        AI_INIT --> AGENT_IDLE["3. Set Main Head, Browser Head, Terminal Head to IDLE"]
+        AGENT_IDLE --> WORKER_OFF["4. Set Workers to DISABLED"]
+        WORKER_OFF --> SAFE_FLAGS["5. Enforce Safe Mode Flags\n(SAFE_MODE=true, TERMINAL_EXEC=false, AUTO_INV=false)"]
+    end
+
+    subgraph RUNTIME ["Authenticated User Runtime"]
+        USER_REQ["Authenticated User Explicit Request"] --> SCOPE_VERIFY["Check Scope & Permitted Operations"]
+        SCOPE_VERIFY --> AI_REASONING["AI Brain Structured Reasoning (gemini-3.8-flash)"]
+        
+        AI_REASONING --> PROPOSAL{"Agent proposes Tool Call"}
+        PROPOSAL --> PERM_CHECK{"Is Terminal Exec Enabled & User Permitted?"}
+        
+        PERM_CHECK -->|"Disabled by Safe Mode"| BLOCK_TOOL["HTTP 403: Blocked by Safe Mode\n(Admin Activation Required)"]
+        PERM_CHECK -->|"Enabled & Authorized"| GATEWAY_EXEC["Controlled Tool Gateway Adapter\n(Strictly NO arbitrary shell)"]
+    end
+
+    SAFE_FLAGS --> RUNTIME
+```
+
+---
+
+## 7. Invite-Only Authentication & Session Verification
+
+```mermaid
+flowchart TD
+    subgraph ONBOARDING ["Invite-Only User Provisioning"]
+        SUPER["Super Admin"] -->|"1. Generates Secure Invitation"| INV["Invitation Token (7-Day Expiry, SHA-256 Hashed)"]
+        INV -->|"2. Invitee Receives Link"| ACCEPT["/v1/auth/accept-invitation"]
+        ACCEPT -->|"3. Sets Password (Argon2id) & Username"| ACTIVE_USER["Active User Account + Role Assigned"]
+    end
+
+    subgraph AUTHENTICATION ["Multi-Factor Login Pipeline"]
+        LOGIN["POST /v1/auth/login (Username/Email + Password)"] --> LOCKOUT{"Failed Attempts >= 5 in 15min?"}
+        LOCKOUT -->|"Yes"| LOCKED["HTTP 423: Account Temporarily Locked"]
+        LOCKOUT -->|"No"| VERIFY_PWD{"Argon2id Hash Matches?"}
+        
+        VERIFY_PWD -->|"Mismatch"| LOG_FAIL["Log to login_attempts & Increment Counter"]
+        VERIFY_PWD -->|"Match"| STATUS_CHECK{"Account Status == 'active'?"}
+        
+        STATUS_CHECK -->|"Suspended / Disabled / Revoked"| FORBIDDEN["HTTP 403: Account Inactive"]
+        STATUS_CHECK -->|"Active"| MFA_CHECK{"MFA Enabled?"}
+        
+        MFA_CHECK -->|"Yes & No Code"| MFA_PROMPT["HTTP 402: MFA Code Required"]
+        MFA_CHECK -->|"Yes & Valid TOTP"| ISSUE_SESSION["Create Session & Set HttpOnly Cookie"]
+        MFA_CHECK -->|"No"| ISSUE_SESSION
+        
+        ISSUE_SESSION --> JWT["Return Signed JWT + Session Token"]
+    end
+```

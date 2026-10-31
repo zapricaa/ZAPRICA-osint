@@ -13,7 +13,9 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
-    username: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    username: Mapped[str] = mapped_column(
+        String(100), unique=True, nullable=False, index=True, default=lambda: f"user_{uuid.uuid4().hex[:10]}"
+    )
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

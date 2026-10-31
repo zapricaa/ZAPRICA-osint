@@ -382,11 +382,10 @@ async def list_audit_events(
             "id": str(e.id),
             "actor_id": str(e.actor_id) if e.actor_id else None,
             "actor_type": e.actor_type,
-            "event_type": e.event_type,
-            "target_type": e.target_type,
-            "target_id": e.target_id,
-            "ip_address": e.ip_address,
-            "details": e.details_json,
+            "action": e.action,
+            "resource_type": e.resource_type,
+            "resource_id": str(e.resource_id) if e.resource_id else None,
+            "details": e.metadata_redacted,
             "created_at": e.created_at.isoformat(),
         }
         for e in events
@@ -472,14 +471,21 @@ async def toggle_terminal_execution(
         safe_mode_controller.disable_terminal_execution(current_user.username)
 
     # Log security audit event
+    user_mem = await db.scalar(
+        select(WorkspaceMembership).where(
+            and_(WorkspaceMembership.user_id == current_user.id, WorkspaceMembership.status == "active")
+        )
+    )
+    ws_id = user_mem.workspace_id if user_mem else uuid.uuid4()
+
     db.add(
         AuditEvent(
-            actor_id=current_user.id,
+            workspace_id=ws_id,
+            actor_id=str(current_user.id),
             actor_type="user",
-            event_type="terminal_execution_toggled",
-            target_type="system",
-            target_id="terminal_gateway",
-            details_json={"enabled": enabled, "reason": reason},
+            action="terminal_execution_toggled",
+            resource_type="system",
+            metadata_redacted={"enabled": enabled, "reason": reason},
         )
     )
     await db.commit()
@@ -502,14 +508,21 @@ async def toggle_safe_mode(
 ):
     """Toggle safe mode globally."""
     safe_mode_controller.set_safe_mode(enabled, current_user.username)
+    user_mem = await db.scalar(
+        select(WorkspaceMembership).where(
+            and_(WorkspaceMembership.user_id == current_user.id, WorkspaceMembership.status == "active")
+        )
+    )
+    ws_id = user_mem.workspace_id if user_mem else uuid.uuid4()
+
     db.add(
         AuditEvent(
-            actor_id=current_user.id,
+            workspace_id=ws_id,
+            actor_id=str(current_user.id),
             actor_type="user",
-            event_type="safe_mode_toggled",
-            target_type="system",
-            target_id="safe_mode_controller",
-            details_json={"enabled": enabled},
+            action="safe_mode_toggled",
+            resource_type="system",
+            metadata_redacted={"enabled": enabled},
         )
     )
     await db.commit()

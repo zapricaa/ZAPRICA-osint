@@ -32,5 +32,5 @@ class Invitation(Base):
     @property
     def is_valid(self) -> bool:
         now = datetime.now(timezone.utc)
-        exp = self.expires_at if self.expires_at.tzinfo else self.expires_at.replace(timezone.utc)
+        exp = self.expires_at if self.expires_at.tzinfo else self.expires_at.replace(tzinfo=timezone.utc)
         return self.status == "pending" and exp > now

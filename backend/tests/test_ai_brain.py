@@ -224,8 +224,8 @@ async def test_function_calling_and_tool_gateway_validation():
 @pytest.mark.asyncio
 async def test_google_gemini_provider_initialization():
     """Verify GoogleGeminiProvider instantiates cleanly without API key in test mode."""
-    # When initialized without key, raises LLMProviderError on invocation (never fabricates)
-    provider = GoogleGeminiProvider(api_key=None)
+    # When initialized with empty key, raises LLMProviderError on invocation (never fabricates)
+    provider = GoogleGeminiProvider(api_key="")
     assert await provider.is_available() is False
 
     with pytest.raises(LLMProviderError, match="GEMINI_API_KEY is not configured"):

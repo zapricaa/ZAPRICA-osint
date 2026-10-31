@@ -39,7 +39,7 @@ class GoogleGeminiProvider(BaseLLMProvider):
         timeout_seconds: Optional[int] = None,
         max_retries: Optional[int] = None,
     ):
-        self.api_key = api_key or model_config.gemini_api_key
+        self.api_key = api_key if api_key is not None else model_config.gemini_api_key
         self.default_model = default_model or model_config.default_model
         self.timeout_seconds = timeout_seconds or model_config.timeout_seconds
         self.max_retries = max_retries or model_config.max_retries
