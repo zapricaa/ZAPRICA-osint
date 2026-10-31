@@ -1,0 +1,895 @@
+openapi: 3.1.1
+info:
+  title: ZAPRICA API
+  version: 0.1.0
+  summary: API contract for ZAPRICA investigations, agents, evidence, reports, and tool management.
+  description: >-
+    Draft API contract for the ZAPRICA documentation scaffold. All operations require
+    authentication except liveness/readiness. Implement server-side workspace authorization,
+    investigation scope validation, rate limits, and audit logging. Never execute a tool
+    solely because a model requested it.
+  contact:
+    name: ZAPRICA Engineering
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: https://api.example.invalid
+    description: Replace with the configured production API hostname
+security:
+  - BearerAuth: []
+tags:
+  - name: Health
+  - name: Identity
+  - name: Investigations
+  - name: Tasks
+  - name: Findings
+  - name: Evidence
+  - name: Reports
+  - name: Tools
+  - name: Administration
+  - name: Events
+paths:
+  /health/live:
+    get:
+      tags: [Health]
+      operationId: liveness
+      security: []
+      summary: Liveness probe
+      responses:
+        '200':
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /health/ready:
+    get:
+      tags: [Health]
+      operationId: readiness
+      security: []
+      summary: Readiness probe
+      responses:
+        '200':
+          description: Application dependencies are ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/me:
+    get:
+      tags: [Identity]
+      operationId: getCurrentUser
+      summary: Get the authenticated user and workspace memberships
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /v1/investigations:
+    get:
+      tags: [Investigations]
+      operationId: listInvestigations
+      summary: List investigations visible to the caller
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/InvestigationStatus'
+      responses:
+        '200':
+          description: Paginated investigations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvestigationList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Investigations]
+      operationId: createInvestigation
+      summary: Create an investigation and explicit scope
+      description: Creation does not execute any external operation. Start is a separate action.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvestigationCreate'
+      responses:
+        '201':
+          description: Investigation created in draft/queued state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Investigation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/investigations/{investigationId}:
+    parameters:
+      - $ref: '#/components/parameters/InvestigationId'
+    get:
+      tags: [Investigations]
+      operationId: getInvestigation
+      summary: Get an investigation and its current state
+      responses:
+        '200':
+          description: Investigation detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Investigation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /v1/investigations/{investigationId}/start:
+    parameters:
+      - $ref: '#/components/parameters/InvestigationId'
+    post:
+      tags: [Investigations]
+      operationId: startInvestigation
+      summary: Validate and start an investigation
+      description: The policy service revalidates scope and permissions before dispatch.
+      responses:
+        '202':
+          description: Investigation accepted for planning/execution
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvestigationActionResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/investigations/{investigationId}/pause:
+    parameters:
+      - $ref: '#/components/parameters/InvestigationId'
+    post:
+      tags: [Investigations]
+      operationId: pauseInvestigation
+      summary: Pause an investigation
+      responses:
+        '202':
+          description: Pause requested
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvestigationActionResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/investigations/{investigationId}/resume:
+    parameters:
+      - $ref: '#/components/parameters/InvestigationId'
+    post:
+      tags: [Investigations]
+      operationId: resumeInvestigation
+      summary: Resume a paused investigation after policy revalidation
+      responses:
+        '202':
+          description: Resume requested
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvestigationActionResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/investigations/{investigationId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/InvestigationId'
+    post:
+      tags: [Investigations]
+      operationId: cancelInvestigation
+      summary: Cancel an investigation and request worker shutdown
+      responses:
+        '202':
+          description: Cancellation requested
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvestigationActionResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/investigations/{investigationId}/tasks:
+    parameters:
+      - $ref: '#/components/parameters/InvestigationId'
+    get:
+      tags: [Tasks]
+      operationId: listTasks
+      summary: List tasks for an investigation
+      responses:
+        '200':
+          description: Task list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /v1/investigations/{investigationId}/findings:
+    parameters:
+      - $ref: '#/components/parameters/InvestigationId'
+    get:
+      tags: [Findings]
+      operationId: listFindings
+      summary: List processed findings with provenance references
+      parameters:
+        - name: verification_status
+          in: query
+          schema:
+            $ref: '#/components/schemas/VerificationStatus'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Paginated findings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FindingList'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /v1/investigations/{investigationId}/evidence:
+    parameters:
+      - $ref: '#/components/parameters/InvestigationId'
+    get:
+      tags: [Evidence]
+      operationId: listEvidence
+      summary: List evidence metadata; raw artifact access uses a short-lived authorized URL
+      responses:
+        '200':
+          description: Evidence artifact metadata
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EvidenceArtifact'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /v1/investigations/{investigationId}/reports:
+    parameters:
+      - $ref: '#/components/parameters/InvestigationId'
+    get:
+      tags: [Reports]
+      operationId: listReports
+      summary: List report versions
+      responses:
+        '200':
+          description: Reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Report'
+    post:
+      tags: [Reports]
+      operationId: generateReport
+      summary: Request report generation from current verified findings
+      responses:
+        '202':
+          description: Report generation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+  /v1/investigations/{investigationId}/events:
+    parameters:
+      - $ref: '#/components/parameters/InvestigationId'
+    get:
+      tags: [Events]
+      operationId: streamInvestigationEvents
+      summary: Stream investigation status events using Server-Sent Events
+      description: Event stream is workspace-authorized and must not expose secrets or raw sensitive payloads.
+      responses:
+        '200':
+          description: Server-sent event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /v1/tools:
+    get:
+      tags: [Tools]
+      operationId: listAvailableTools
+      summary: List approved tools available to the caller's agent context
+      parameters:
+        - name: capability
+          in: query
+          schema:
+            type: string
+        - name: execution_type
+          in: query
+          schema:
+            type: string
+            enum: [browser, terminal, api, library]
+      responses:
+        '200':
+          description: Approved tool versions only
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ToolSummary'
+  /v1/admin/tools:
+    get:
+      tags: [Administration, Tools]
+      operationId: listAdminTools
+      summary: List tool records, including drafts and disabled versions
+      responses:
+        '200':
+          description: Registered tools visible to administrators
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ToolSummary'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Administration, Tools]
+      summary: Register a draft tool
+      operationId: createToolDraft
+      description: Admin only. Registration never installs or executes the submitted tool.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolDraftCreate'
+      responses:
+        '201':
+          description: Draft created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolVersion'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /v1/admin/tools/{toolId}/versions:
+    parameters:
+      - $ref: '#/components/parameters/ToolId'
+    get:
+      tags: [Administration, Tools]
+      operationId: listToolVersions
+      summary: List immutable versions of a registered tool
+      responses:
+        '200':
+          description: Tool versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ToolVersion'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /v1/admin/tools/{toolId}/versions/{versionId}/assignments:
+    parameters:
+      - $ref: '#/components/parameters/ToolId'
+      - $ref: '#/components/parameters/VersionId'
+    put:
+      tags: [Administration, Tools]
+      operationId: replaceToolAssignments
+      summary: Assign a validated/published tool version to agent classes and capabilities
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/ToolAssignmentCreate'
+      responses:
+        '200':
+          description: Assignments saved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ToolAssignment'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/admin/tools/{toolId}/versions/{versionId}/disable:
+    parameters:
+      - $ref: '#/components/parameters/ToolId'
+      - $ref: '#/components/parameters/VersionId'
+    post:
+      tags: [Administration, Tools]
+      operationId: disableToolVersion
+      summary: Disable a published tool version immediately
+      responses:
+        '200':
+          description: Tool version disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolVersion'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /v1/admin/tools/{toolId}/activate-version:
+    parameters:
+      - $ref: '#/components/parameters/ToolId'
+    post:
+      tags: [Administration, Tools]
+      operationId: activateToolVersion
+      summary: Activate a previously approved version as a rollback
+      description: The selected version must still be approved, non-revoked, and pass current policy checks.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version_id, reason]
+              properties:
+                version_id: {type: string, format: uuid}
+                reason: {type: string, minLength: 10, maxLength: 1000}
+      responses:
+        '200':
+          description: Version activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolVersion'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/admin/tools/{toolId}/versions/{versionId}/validate:
+    parameters:
+      - $ref: '#/components/parameters/ToolId'
+      - $ref: '#/components/parameters/VersionId'
+    post:
+      tags: [Administration, Tools]
+      operationId: validateToolVersion
+      summary: Run isolated validation for a draft tool version
+      responses:
+        '202':
+          description: Validation job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolValidation'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/admin/tools/{toolId}/versions/{versionId}/approve:
+    parameters:
+      - $ref: '#/components/parameters/ToolId'
+      - $ref: '#/components/parameters/VersionId'
+    post:
+      tags: [Administration, Tools]
+      operationId: approveToolVersion
+      summary: Human approval of a validated tool version
+      description: Approval is separate from validation and must be recorded in the audit log.
+      responses:
+        '200':
+          description: Version approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolVersion'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/admin/tools/{toolId}/versions/{versionId}/publish:
+    parameters:
+      - $ref: '#/components/parameters/ToolId'
+      - $ref: '#/components/parameters/VersionId'
+    post:
+      tags: [Administration, Tools]
+      operationId: publishToolVersion
+      summary: Publish an approved tool version to selected agents
+      responses:
+        '200':
+          description: Version published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolVersion'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    WorkspaceId:
+      name: X-Workspace-ID
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+    InvestigationId:
+      name: investigationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ToolId:
+      name: toolId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    VersionId:
+      name: versionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+  responses:
+    BadRequest:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Authentication required or token invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Caller lacks permission or scope does not allow the action
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found in caller's authorized workspace
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Resource state conflicts with requested action
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServiceUnavailable:
+      description: A required dependency is not ready
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+    CurrentUser:
+      type: object
+      required: [id, email, display_name, memberships]
+      properties:
+        id: {type: string, format: uuid}
+        email: {type: string, format: email}
+        display_name: {type: string}
+        memberships:
+          type: array
+          items:
+            type: object
+            required: [workspace_id, role]
+            properties:
+              workspace_id: {type: string, format: uuid}
+              role: {type: string, enum: [admin, investigator, reviewer, viewer]}
+    InvestigationStatus:
+      type: string
+      enum: [draft, queued, planning, running, awaiting_approval, paused, completed, failed, cancelled]
+    TaskStatus:
+      type: string
+      enum: [queued, running, awaiting_approval, succeeded, no_findings, partial, failed, timed_out, cancelled]
+    VerificationStatus:
+      type: string
+      enum: [unreviewed, supported, contradicted, insufficient_evidence, rejected]
+    InvestigationScope:
+      type: object
+      required: [purpose, allowed_targets, allowed_operations, expires_at]
+      properties:
+        purpose:
+          type: string
+          minLength: 10
+          maxLength: 2000
+        allowed_targets:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [target_type, value]
+            properties:
+              target_type: {type: string, enum: [domain, url, ip, file, other]}
+              value: {type: string, maxLength: 2048}
+        allowed_operations:
+          type: array
+          minItems: 1
+          items: {type: string, maxLength: 80}
+        denied_targets:
+          type: array
+          items: {type: string, maxLength: 2048}
+        expires_at: {type: string, format: date-time}
+        authorization_reference: {type: string, maxLength: 500}
+    InvestigationCreate:
+      type: object
+      required: [title, objective, investigation_type, scope]
+      properties:
+        title: {type: string, minLength: 3, maxLength: 160}
+        objective: {type: string, minLength: 10, maxLength: 4000}
+        investigation_type:
+          type: string
+          enum: [website_intelligence, domain_intelligence, username_public_profile, file_analysis, other]
+        scope:
+          $ref: '#/components/schemas/InvestigationScope'
+        priority:
+          type: string
+          enum: [low, normal, high]
+          default: normal
+    Investigation:
+      type: object
+      required: [id, workspace_id, title, objective, investigation_type, status, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        title: {type: string}
+        objective: {type: string}
+        investigation_type: {type: string}
+        status: {$ref: '#/components/schemas/InvestigationStatus'}
+        created_at: {type: string, format: date-time}
+        started_at: {type: [string, 'null'], format: date-time}
+        completed_at: {type: [string, 'null'], format: date-time}
+        scope:
+          $ref: '#/components/schemas/InvestigationScope'
+    InvestigationList:
+      type: object
+      required: [items, page, page_size, total]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Investigation'}
+        page: {type: integer}
+        page_size: {type: integer}
+        total: {type: integer}
+    InvestigationActionResponse:
+      type: object
+      required: [investigation_id, status, message]
+      properties:
+        investigation_id: {type: string, format: uuid}
+        status: {$ref: '#/components/schemas/InvestigationStatus'}
+        message: {type: string}
+    Task:
+      type: object
+      required: [id, investigation_id, assigned_agent, capability, status]
+      properties:
+        id: {type: string, format: uuid}
+        investigation_id: {type: string, format: uuid}
+        parent_task_id: {type: [string, 'null'], format: uuid}
+        assigned_agent: {type: string, enum: [main_head, browser_head, terminal_head, browser_worker, terminal_worker]}
+        capability: {type: string}
+        status: {$ref: '#/components/schemas/TaskStatus'}
+        risk_class: {type: string, enum: [low, medium, high, prohibited]}
+        created_at: {type: string, format: date-time}
+    Finding:
+      type: object
+      required: [id, investigation_id, finding_type, summary, verification_status, source_refs]
+      properties:
+        id: {type: string, format: uuid}
+        investigation_id: {type: string, format: uuid}
+        finding_type: {type: string}
+        title: {type: string}
+        normalized_value: {type: [string, 'null']}
+        summary: {type: string}
+        verification_status: {$ref: '#/components/schemas/VerificationStatus'}
+        confidence_level: {type: string, enum: [unassessed, low, medium, high]}
+        source_refs:
+          type: array
+          items: {type: string, format: uuid}
+        observed_at: {type: string, format: date-time}
+    FindingList:
+      type: object
+      required: [items, page, page_size, total]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Finding'}
+        page: {type: integer}
+        page_size: {type: integer}
+        total: {type: integer}
+    EvidenceArtifact:
+      type: object
+      required: [id, media_type, byte_size, sha256, collected_at, integrity_status]
+      properties:
+        id: {type: string, format: uuid}
+        media_type: {type: string}
+        byte_size: {type: integer, minimum: 0}
+        sha256: {type: string, pattern: '^[a-fA-F0-9]{64}$'}
+        source_url: {type: [string, 'null'], format: uri}
+        collected_at: {type: string, format: date-time}
+        integrity_status: {type: string, enum: [verified, mismatch, pending]}
+        authorized_download_url:
+          type: string
+          format: uri
+          description: Short-lived URL issued only after object-level authorization.
+    Report:
+      type: object
+      required: [id, investigation_id, version, status, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        investigation_id: {type: string, format: uuid}
+        version: {type: integer, minimum: 1}
+        status: {type: string, enum: [queued, generating, draft, review, finalized, failed]}
+        title: {type: string}
+        summary: {type: string}
+        created_at: {type: string, format: date-time}
+    ToolSummary:
+      type: object
+      required: [tool_id, display_name, version, execution_type, capabilities, status]
+      properties:
+        tool_id: {type: string}
+        display_name: {type: string}
+        version: {type: string}
+        execution_type: {type: string, enum: [browser, terminal, api, library]}
+        capabilities:
+          type: array
+          items: {type: string}
+        status: {type: string, enum: [published, disabled, revoked]}
+    ToolDraftCreate:
+      type: object
+      required: [tool_key, display_name, description, vendor_or_source, license_id, execution_type, capabilities, documentation]
+      properties:
+        tool_key: {type: string, pattern: '^[a-z][a-z0-9_-]{1,63}$'}
+        display_name: {type: string, minLength: 2, maxLength: 120}
+        description: {type: string, minLength: 10, maxLength: 2000}
+        vendor_or_source: {type: string, maxLength: 300}
+        license_id: {type: string, maxLength: 120}
+        homepage_url: {type: string, format: uri}
+        execution_type: {type: string, enum: [browser, terminal, api, library]}
+        capabilities:
+          type: array
+          minItems: 1
+          items: {type: string, maxLength: 80}
+        documentation:
+          type: object
+          properties:
+            usage: {type: string, maxLength: 2000}
+            installation: {type: string, maxLength: 2000}
+            examples: {type: string, maxLength: 2000}
+            limitations: {type: string, maxLength: 2000}
+        source_reference: {type: string, maxLength: 2000}
+        artifact_digest: {type: string, pattern: '^[a-fA-F0-9]{64}$'}
+    ToolVersion:
+      type: object
+      required: [id, tool_id, version, approval_status, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        tool_id: {type: string, format: uuid}
+        version: {type: string}
+        approval_status: {type: string, enum: [draft, testing, pending_review, approved, published, rejected, disabled, revoked]}
+        created_at: {type: string, format: date-time}
+    ToolValidation:
+      type: object
+      required: [tool_version_id, status]
+      properties:
+        tool_version_id: {type: string, format: uuid}
+        status: {type: string, enum: [queued, running, passed, failed]}
+        checks:
+          type: array
+          items:
+            type: object
+            required: [name, status]
+            properties:
+              name: {type: string}
+              status: {type: string, enum: [passed, failed, skipped]}
+              summary: {type: string}
+    ToolAssignmentCreate:
+      type: object
+      required: [agent_type, capability, enabled, scope_constraints]
+      properties:
+        agent_type:
+          type: string
+          enum: [main_head, browser_head, terminal_head, browser_worker, terminal_worker]
+        capability: {type: string, maxLength: 80}
+        enabled: {type: boolean}
+        scope_constraints:
+          type: object
+          additionalProperties: true
+    ToolAssignment:
+      allOf:
+        - $ref: '#/components/schemas/ToolAssignmentCreate'
+        - type: object
+          required: [id, tool_version_id, created_at]
+          properties:
+            id: {type: string, format: uuid}
+            tool_version_id: {type: string, format: uuid}
+            created_at: {type: string, format: date-time}
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code: {type: string}
+            message: {type: string}
+            request_id: {type: string}
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field: {type: string}
+                  issue: {type: string}
