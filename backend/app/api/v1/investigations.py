@@ -276,6 +276,74 @@ async def list_reports(
     return [ReportOut.model_validate(r) for r in reports]
 
 
+@router.post(
+    "/{investigationId}/reports",
+    response_model=ReportOut,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Generate report from current verified findings"
+)
+async def generate_report(
+    investigationId: uuid.UUID,
+    workspace: Workspace = Depends(get_current_workspace),
+    user: User = Depends(get_current_user),
+    _role=Depends(require_role(["admin", "investigator", "reviewer"])),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.report_service import ReportService
+    report = await ReportService.generate_investigation_report(
+        session=db,
+        workspace_id=workspace.id,
+        investigation_id=investigationId,
+    )
+    return ReportOut.model_validate(report)
+
+
+@router.get(
+    "/{investigationId}/reports/export/json",
+    summary="Export latest report as JSON (AC-REPORT-04)"
+)
+async def export_report_json(
+    investigationId: uuid.UUID,
+    workspace: Workspace = Depends(get_current_workspace),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.report_service import ReportService
+    content = await ReportService.export_json(
+        session=db,
+        workspace_id=workspace.id,
+        investigation_id=investigationId,
+    )
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": f"attachment; filename=report_{investigationId}.json"}
+    )
+
+
+@router.get(
+    "/{investigationId}/reports/export/csv",
+    summary="Export findings as CSV (AC-REPORT-04)"
+)
+async def export_report_csv(
+    investigationId: uuid.UUID,
+    workspace: Workspace = Depends(get_current_workspace),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.report_service import ReportService
+    content = await ReportService.export_csv(
+        session=db,
+        workspace_id=workspace.id,
+        investigation_id=investigationId,
+    )
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=findings_{investigationId}.csv"}
+    )
+
+
 @router.get(
     "/{investigationId}/events",
     summary="Stream investigation status events using Server-Sent Events"

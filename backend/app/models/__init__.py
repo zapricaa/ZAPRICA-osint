@@ -1,6 +1,9 @@
 from app.core.database import Base
 from app.models.workspaces import Workspace, WorkspaceMembership
 from app.models.users import User
+from app.models.rbac import Role, Permission, UserRole, RolePermission, UserToolPermission
+from app.models.sessions import Session, LoginAttempt
+from app.models.invitations import Invitation
 from app.models.investigations import Investigation, InvestigationScope
 from app.models.tasks import Task, AgentRun, ToolRun
 from app.models.tools import Tool, ToolVersion, AgentToolAssignment
@@ -13,6 +16,14 @@ __all__ = [
     "Workspace",
     "WorkspaceMembership",
     "User",
+    "Role",
+    "Permission",
+    "UserRole",
+    "RolePermission",
+    "UserToolPermission",
+    "Session",
+    "LoginAttempt",
+    "Invitation",
     "Investigation",
     "InvestigationScope",
     "Task",

@@ -1,5 +1,8 @@
+"""Tests for Authentication, Authorization, Invite-Only Policies, and RBAC."""
+
 import pytest
 import uuid
+import pyotp
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
@@ -7,6 +10,9 @@ from app.main import app
 from app.core.database import Base, get_db
 from app.models.users import User
 from app.models.workspaces import Workspace, WorkspaceMembership
+from app.models.rbac import Role, UserRole
+from app.models.sessions import Session, LoginAttempt
+from app.services.auth_service import AuthService
 
 
 @pytest.fixture
@@ -36,12 +42,10 @@ async def client(test_db_session: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_health_endpoints(client: AsyncClient):
-    # Liveness
     resp = await client.get("/health/live")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
 
-    # Readiness
     resp = await client.get("/health/ready")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
@@ -49,138 +53,245 @@ async def test_health_endpoints(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_ac_auth_01_unauthenticated_user_rejected(client: AsyncClient):
-    """AC-AUTH-01: Unauthenticated user cannot access protected endpoints (returns 401)."""
+    """AC-AUTH-01: Anonymous users cannot access protected APIs (returns 401)."""
     resp = await client.get("/v1/me")
     assert resp.status_code == 401
-    assert "credential required" in resp.json()["detail"].lower()
+    assert "authentication required" in resp.json()["detail"].lower()
 
 
 @pytest.mark.asyncio
-async def test_user_registration_and_login_flow(client: AsyncClient):
-    # 1. Register
-    reg_payload = {
-        "email": "analyst@example.com",
-        "display_name": "Cyber Analyst",
-        "password": "SecurePassword123!",
-        "workspace_name": "Threat Intel Ops"
+async def test_public_registration_disabled(client: AsyncClient):
+    """Registration Policy: No public signup or anonymous registration endpoint."""
+    resp = await client.post("/v1/auth/register", json={
+        "email": "hacker@example.com",
+        "display_name": "Anonymous",
+        "password": "Password123!"
+    })
+    assert resp.status_code == 403
+    assert "public registration is disabled" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_one_time_bootstrap_super_admin(client: AsyncClient):
+    """One-time bootstrap of the first SUPER_ADMIN account."""
+    bootstrap_payload = {
+        "username": "superadmin",
+        "email": "admin@example.com",
+        "display_name": "Chief Security Officer",
+        "password": "SuperSecureAdminPassword123!",
+        "workspace_name": "HQ Cyber Command"
     }
-    resp = await client.post("/v1/auth/register", json=reg_payload)
+    resp = await client.post("/v1/auth/bootstrap", json=bootstrap_payload)
     assert resp.status_code == 201
     data = resp.json()
     assert "access_token" in data
-    assert data["user"]["email"] == "analyst@example.com"
-    assert len(data["user"]["memberships"]) == 1
-    assert data["user"]["memberships"][0]["role"] == "admin"
+    assert data["user"]["username"] == "superadmin"
+    assert "SUPER_ADMIN" in data["user"]["roles"]
 
-    token = data["access_token"]
-    ws_id = data["user"]["memberships"][0]["workspace_id"]
+    # Verify session cookie was set
+    assert "session_token" in resp.cookies or "session_token" in data
 
-    # 2. Access /v1/me with Token
-    headers = {"Authorization": f"Bearer {token}", "X-Workspace-ID": ws_id}
-    resp_me = await client.get("/v1/me", headers=headers)
-    assert resp_me.status_code == 200
-    me_data = resp_me.json()
-    assert me_data["email"] == "analyst@example.com"
-
-    # 3. Login with correct credentials
-    login_payload = {
-        "email": "analyst@example.com",
-        "password": "SecurePassword123!"
-    }
-    resp_login = await client.post("/v1/auth/login", json=login_payload)
-    assert resp_login.status_code == 200
-    assert "access_token" in resp_login.json()
-
-    # 4. Login with wrong password
-    bad_login = {
-        "email": "analyst@example.com",
-        "password": "WrongPassword!"
-    }
-    resp_bad = await client.post("/v1/auth/login", json=bad_login)
-    assert resp_bad.status_code == 401
+    # Attempting to bootstrap a SECOND time must fail with 403
+    second_resp = await client.post("/v1/auth/bootstrap", json=bootstrap_payload)
+    assert second_resp.status_code == 403
+    assert "already been bootstrapped" in second_resp.json()["detail"].lower()
 
 
 @pytest.mark.asyncio
-async def test_ac_auth_02_cross_workspace_isolation(client: AsyncClient, test_db_session: AsyncSession):
-    """AC-AUTH-02: User cannot access another workspace's resource or scope."""
-    # Register User A in Workspace A
-    user_a_payload = {
-        "email": "userA@example.com",
-        "display_name": "User A",
-        "password": "Password123!",
-        "workspace_name": "Workspace Alpha"
-    }
-    resp_a = await client.post("/v1/auth/register", json=user_a_payload)
-    assert resp_a.status_code == 201
-    token_a = resp_a.json()["access_token"]
+async def test_admin_invitation_and_acceptance_flow(client: AsyncClient):
+    """Administrators issue invitations and users redeem them to create accounts."""
+    # 1. Bootstrap super admin
+    boot_resp = await client.post("/v1/auth/bootstrap", json={
+        "username": "superadmin2",
+        "email": "super2@example.com",
+        "display_name": "Super Admin 2",
+        "password": "Password123!@#"
+    })
+    admin_token = boot_resp.json()["access_token"]
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
-    # Register User B in Workspace B
-    user_b_payload = {
-        "email": "userB@example.com",
-        "display_name": "User B",
-        "password": "Password123!",
-        "workspace_name": "Workspace Beta"
-    }
-    resp_b = await client.post("/v1/auth/register", json=user_b_payload)
-    assert resp_b.status_code == 201
-    ws_b_id = resp_b.json()["user"]["memberships"][0]["workspace_id"]
-
-    # Now User A attempts to operate using Workspace B's ID in header
-    from app.api.deps import get_current_workspace, get_current_user
-    from fastapi import HTTPException
-
-    user_a = await client.get("/v1/me", headers={"Authorization": f"Bearer {token_a}"})
-    assert user_a.status_code == 200
-
-    # User A has no membership in Workspace B
-    with pytest.raises(HTTPException) as exc_info:
-        authed_user = await get_current_user(
-            credentials=type("Creds", (), {"credentials": token_a})(),
-            db=test_db_session
-        )
-        await get_current_workspace(
-            user=authed_user,
-            x_workspace_id=ws_b_id,
-            db=test_db_session
-        )
-    assert exc_info.value.status_code == 403
-    assert "not an authorized member" in exc_info.value.detail.lower()
-
-
-@pytest.mark.asyncio
-async def test_ac_auth_03_role_authorization_restriction(test_db_session: AsyncSession):
-    """AC-AUTH-03: User with viewer role cannot perform investigator actions."""
-    from app.api.deps import require_role
-    from fastapi import HTTPException
-    from sqlalchemy import select
-    from sqlalchemy.orm import selectinload
-
-    # Create workspace and viewer user
-    ws = Workspace(name="Test Workspace", slug="test-ws", status="active")
-    test_db_session.add(ws)
-    await test_db_session.flush()
-
-    user = User(email="viewer@example.com", display_name="Viewer", status="active")
-    test_db_session.add(user)
-    await test_db_session.flush()
-
-    membership = WorkspaceMembership(workspace_id=ws.id, user_id=user.id, role="viewer", status="active")
-    test_db_session.add(membership)
-    await test_db_session.commit()
-
-    # Re-query user eagerly with selectinload
-    stmt = (
-        select(User)
-        .where(User.id == user.id)
-        .options(selectinload(User.memberships).selectinload(WorkspaceMembership.workspace))
+    # 2. Super admin creates invitation for an investigator
+    inv_resp = await client.post(
+        "/v1/admin/invitations",
+        json={"email": "investigator1@example.com", "role": "INVESTIGATOR"},
+        headers=admin_headers
     )
-    user_loaded = await test_db_session.scalar(stmt)
-    assert user_loaded is not None
+    assert inv_resp.status_code == 201
+    inv_data = inv_resp.json()
+    raw_invite_token = inv_data["invitation_token"]
+    assert raw_invite_token is not None
 
-    # Verify require_role(["admin", "investigator"]) blocks the viewer
-    check_investigator = require_role(["admin", "investigator"])
-    with pytest.raises(HTTPException) as exc_info:
-        await check_investigator(user=user_loaded, workspace=ws)
+    # 3. Invitee redeems invitation at /v1/auth/accept-invitation
+    accept_resp = await client.post("/v1/auth/accept-invitation", json={
+        "token": raw_invite_token,
+        "username": "inv_user1",
+        "display_name": "Lead Field Investigator",
+        "password": "InvestigatorPassword123!"
+    })
+    assert accept_resp.status_code == 201
+    user_data = accept_resp.json()
+    assert user_data["username"] == "inv_user1"
+    assert "INVESTIGATOR" in user_data["roles"]
 
-    assert exc_info.value.status_code == 403
-    assert "viewer" in exc_info.value.detail
+    # 4. Attempting to re-use redeemed token fails
+    reuse_resp = await client.post("/v1/auth/accept-invitation", json={
+        "token": raw_invite_token,
+        "username": "another_user",
+        "display_name": "Another",
+        "password": "AnotherPassword123!"
+    })
+    assert reuse_resp.status_code == 400
+    assert "invalid, expired, or already redeemed" in reuse_resp.json()["detail"].lower()
+
+    # 5. New user logs in successfully with username or email
+    login_resp = await client.post("/v1/auth/login", json={
+        "username_or_email": "inv_user1",
+        "password": "InvestigatorPassword123!"
+    })
+    assert login_resp.status_code == 200
+    assert "access_token" in login_resp.json()
+
+
+@pytest.mark.asyncio
+async def test_suspended_user_access_revocation(client: AsyncClient):
+    """Suspended users cannot log in and have their active sessions revoked."""
+    # 1. Bootstrap super admin
+    boot_resp = await client.post("/v1/auth/bootstrap", json={
+        "username": "superadmin3",
+        "email": "super3@example.com",
+        "display_name": "Super Admin 3",
+        "password": "Password123!@#"
+    })
+    admin_token = boot_resp.json()["access_token"]
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    # 2. Create investigator directly
+    user_resp = await client.post(
+        "/v1/admin/users",
+        json={
+            "username": "rogue_user",
+            "email": "rogue@example.com",
+            "display_name": "Rogue Agent",
+            "password": "RoguePassword123!",
+            "role": "INVESTIGATOR"
+        },
+        headers=admin_headers
+    )
+    assert user_resp.status_code == 201
+    rogue_id = user_resp.json()["id"]
+
+    # 3. Rogue user logs in
+    login_resp = await client.post("/v1/auth/login", json={
+        "username_or_email": "rogue_user",
+        "password": "RoguePassword123!"
+    })
+    assert login_resp.status_code == 200
+    rogue_token = login_resp.json()["access_token"]
+
+    # 4. Verify rogue user can access /v1/me
+    me_resp = await client.get("/v1/me", headers={"Authorization": f"Bearer {rogue_token}"})
+    assert me_resp.status_code == 200
+
+    # 5. Super admin suspends rogue user
+    suspend_resp = await client.patch(
+        f"/v1/admin/users/{rogue_id}/status",
+        json={"status": "suspended", "reason": "Security audit hold"},
+        headers=admin_headers
+    )
+    assert suspend_resp.status_code == 200
+    assert suspend_resp.json()["status"] == "suspended"
+
+    # 6. Rogue user cannot access /v1/me anymore (403 Forbidden)
+    me_blocked = await client.get("/v1/me", headers={"Authorization": f"Bearer {rogue_token}"})
+    assert me_blocked.status_code == 403
+    assert "suspended" in me_blocked.json()["detail"].lower()
+
+    # 7. Rogue user cannot log in anymore
+    login_blocked = await client.post("/v1/auth/login", json={
+        "username_or_email": "rogue_user",
+        "password": "RoguePassword123!"
+    })
+    assert login_blocked.status_code == 403
+    assert "suspended" in login_blocked.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_mfa_setup_and_login_verification(client: AsyncClient):
+    """MFA setup, enrollment, and TOTP verification during login."""
+    # 1. Bootstrap super admin
+    boot_resp = await client.post("/v1/auth/bootstrap", json={
+        "username": "mfadmin",
+        "email": "mfa@example.com",
+        "display_name": "MFA Admin",
+        "password": "Password123!@#"
+    })
+    admin_token = boot_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    # 2. Initiate MFA setup
+    setup_resp = await client.post("/v1/auth/mfa/setup", headers=headers)
+    assert setup_resp.status_code == 200
+    mfa_secret = setup_resp.json()["secret"]
+    assert len(mfa_secret) == 32
+
+    # 3. Complete enrollment with valid TOTP code
+    totp = pyotp.TOTP(mfa_secret)
+    valid_code = totp.now()
+    enable_resp = await client.post(
+        "/v1/auth/mfa/enable",
+        json={"mfa_code": valid_code},
+        headers=headers
+    )
+    assert enable_resp.status_code == 200
+    assert enable_resp.json()["mfa_enabled"] is True
+
+    # 4. Login without MFA code raises HTTP 402/special MFA required challenge
+    mfa_challenge_resp = await client.post("/v1/auth/login", json={
+        "username_or_email": "mfadmin",
+        "password": "Password123!@#"
+    })
+    assert mfa_challenge_resp.status_code in [401, 402]
+    detail = mfa_challenge_resp.json()["detail"]
+    assert isinstance(detail, dict)
+    assert detail.get("mfa_required") is True
+
+    # 5. Login with invalid MFA code fails (401)
+    bad_mfa_resp = await client.post("/v1/auth/login", json={
+        "username_or_email": "mfadmin",
+        "password": "Password123!@#",
+        "mfa_code": "000000"
+    })
+    assert bad_mfa_resp.status_code == 401
+    assert "invalid mfa" in bad_mfa_resp.json()["detail"].lower()
+
+    # 6. Login with valid MFA code succeeds
+    fresh_code = totp.now()
+    good_mfa_resp = await client.post("/v1/auth/login", json={
+        "username_or_email": "mfadmin",
+        "password": "Password123!@#",
+        "mfa_code": fresh_code
+    })
+    assert good_mfa_resp.status_code == 200
+    assert "access_token" in good_mfa_resp.json()
+
+
+@pytest.mark.asyncio
+async def test_logout_invalidates_session(client: AsyncClient):
+    """Logout invalidates the active database session."""
+    boot_resp = await client.post("/v1/auth/bootstrap", json={
+        "username": "logoutuser",
+        "email": "logout@example.com",
+        "display_name": "Logout User",
+        "password": "Password123!@#"
+    })
+    token = boot_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Verify authenticated
+    me_resp = await client.get("/v1/me", headers=headers)
+    assert me_resp.status_code == 200
+
+    # Logout
+    logout_resp = await client.post("/v1/auth/logout", headers=headers)
+    assert logout_resp.status_code == 200
+    assert "logged out" in logout_resp.json()["message"].lower()

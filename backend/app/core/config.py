@@ -25,13 +25,26 @@ class Settings(BaseSettings):
     # AI / LLM Configuration
     LLM_PROVIDER: Literal["mock", "gemini", "openai"] = "mock"
     LLM_API_KEY: Optional[str] = None
-    LLM_MODEL_NAME: str = "gemini-2.5-flash"
+    LLM_MODEL_NAME: str = "gemini-3.8-flash"
+
+    # Google Gemini AI Brain
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-3.8-flash"
+    GEMINI_MAIN_HEAD_MODEL: str = "gemini-3.8-flash"
+    GEMINI_BROWSER_HEAD_MODEL: str = "gemini-3.5-flash-lite"
+    GEMINI_TERMINAL_HEAD_MODEL: str = "gemini-3.5-flash-lite"
 
     # Sandbox / Tool Execution
     ENABLE_TERMINAL_SANDBOX: bool = True
     MAX_BROWSER_TIMEOUT_SECONDS: int = 60
     MAX_TERMINAL_TIMEOUT_SECONDS: int = 30
     MAX_TOOL_OUTPUT_BYTES: int = 10 * 1024 * 1024  # 10 MB limit
+
+    # Safe Startup Mode Flags (Defaults per Safe Application Startup Requirement)
+    ZAPRICA_SAFE_MODE: bool = True
+    TERMINAL_EXECUTION_ENABLED: bool = False
+    AUTO_INVESTIGATION_ENABLED: bool = False
+    AUTO_TOOL_INSTALLATION: bool = False
 
     # Logging
     LOG_LEVEL: str = "INFO"

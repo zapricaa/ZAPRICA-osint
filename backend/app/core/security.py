@@ -1,32 +1,80 @@
+"""Security utilities: Argon2id password hashing, TOTP MFA, and session tokens."""
+
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Union
-import bcrypt
 import jwt
+import pyotp
+from pwdlib import PasswordHash
+from pwdlib.hashers.argon2 import Argon2Hasher
+from pwdlib.hashers.bcrypt import BcryptHasher
 
 from app.core.config import settings
 
+# Hybrid password hasher: Argon2id primary, Bcrypt fallback for migration
+_hasher = PasswordHash((Argon2Hasher(), BcryptHasher()))
+
 
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt."""
-    salt = bcrypt.gensalt(rounds=12)
-    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
+    """Hash password using Argon2id."""
+    return _hasher.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a plain password against a bcrypt hash."""
+    """Verify plain password against Argon2id or legacy hash."""
+    if not hashed_password:
+        return False
     try:
-        return bcrypt.checkpw(
-            plain_password.encode("utf-8"),
-            hashed_password.encode("utf-8")
-        )
+        return _hasher.verify(plain_password, hashed_password)
     except Exception:
         return False
+
+
+def generate_mfa_secret() -> str:
+    """Generate cryptographically secure base32 secret for TOTP MFA."""
+    return pyotp.random_base32()
+
+
+def get_mfa_uri(secret: str, account_name: str, issuer_name: str = "ZAPRICA-OSINT") -> str:
+    """Generate otpauth:// URI for authenticator apps."""
+    totp = pyotp.TOTP(secret)
+    return totp.provisioning_uri(name=account_name, issuer_name=issuer_name)
+
+
+def verify_mfa_code(secret: str, code: str) -> bool:
+    """Verify TOTP 6-digit MFA code with ±30s clock drift tolerance."""
+    if not secret or not code:
+        return False
+    totp = pyotp.TOTP(secret)
+    return totp.verify(code.strip(), valid_window=1)
+
+
+def generate_session_token() -> str:
+    """Generate a high-entropy session token."""
+    return secrets.token_urlsafe(48)
+
+
+def hash_session_token(token: str) -> str:
+    """SHA-256 hash of a session token for secure database storage."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def generate_invitation_token() -> str:
+    """Generate a high-entropy single-use invitation token."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_invitation_token(token: str) -> str:
+    """SHA-256 hash of an invitation token."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def create_access_token(
     subject: Union[str, Any],
     workspace_id: Optional[str] = None,
     role: Optional[str] = None,
+    permissions: Optional[list[str]] = None,
     expires_delta: Optional[timedelta] = None,
 ) -> str:
     """Generate a signed JWT access token."""
@@ -45,13 +93,14 @@ def create_access_token(
         to_encode["workspace_id"] = str(workspace_id)
     if role:
         to_encode["role"] = role
+    if permissions:
+        to_encode["permissions"] = permissions
 
-    encoded_jwt = jwt.encode(
+    return jwt.encode(
         to_encode,
         settings.SECRET_KEY,
         algorithm=settings.ALGORITHM
     )
-    return encoded_jwt
 
 
 def decode_access_token(token: str) -> Optional[dict]:

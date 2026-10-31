@@ -9,6 +9,7 @@ from app.api.v1.health import router as health_router
 from app.api.v1.investigations import router as investigations_router
 from app.api.v1.tools import router as tools_router
 from app.api.v1.admin_tools import router as admin_tools_router
+from app.api.v1.admin_users import router as admin_users_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -53,6 +54,7 @@ app.include_router(auth_router, prefix=settings.API_V1_STR, tags=["Identity", "A
 app.include_router(investigations_router, prefix=settings.API_V1_STR, tags=["Investigations"])
 app.include_router(tools_router, prefix=settings.API_V1_STR, tags=["Tools"])
 app.include_router(admin_tools_router, prefix=settings.API_V1_STR, tags=["Administration", "Tools"])
+app.include_router(admin_users_router, prefix=settings.API_V1_STR, tags=["Administration", "Users"])
 
 
 @app.get("/")
