@@ -1,86 +1,112 @@
 # ZAPRICA
 
-**AI-assisted, tool-extensible OSINT investigation workspace**
+**AI-Assisted, Tool-Extensible OSINT Investigation Workspace**
 
-> Status: engineering blueprint / documentation scaffold. This repository currently defines the product and technical contracts; it is not yet a runnable application.
+ZAPRICA is an enterprise-grade open-source intelligence platform featuring a 3-tier multi-agent hierarchy (LangGraph), Google Gemini AI Brain (`google-genai`), invite-only authentication with RBAC, safe startup mode, dedicated Playwright browser automation, and hardened Docker container execution sandboxes.
 
-ZAPRICA is designed to accept an investigator's authorized request, plan the work, delegate tasks to browser- and terminal-oriented supervisors, collect and process evidence, correlate findings, and present a traceable report.
+---
 
-## Core operating model
+## Clean Repository Structure
 
-- **Main Head Agent:** central supervisor for intent understanding, scope enforcement, planning, routing, monitoring, consolidation, and reporting.
-- **Browser Head Agent:** supervises browser workers that use approved browser capabilities.
-- **Terminal Head Agent:** supervises command-line workers operating only through approved, isolated tools.
-- **Workers:** perform bounded research or deterministic data-processing tasks and report to their Sub-Head.
-- **Tool Intelligence & Management System (TIMS):** lets an administrator onboard, document, test, approve, version, and assign future tools without rewriting the core agents.
-- **Evidence pipeline:** preserves raw evidence and creates traceable processed findings.
-
-## Repository layout
+All runtime application code, orchestration assets, and non-application documentation are strictly segregated:
 
 ```text
-my-project/
-├── .cursorrules
-├── docs/
-│   ├── PRD.md
-│   ├── ARCHITECTURE.md
-│   ├── DATABASE_SCHEMA.md
-│   ├── API_SPEC.yaml
-│   ├── SECURITY.md
-│   ├── ACCEPTANCE_CRITERIA.md
-│   └── DEPLOYMENT.md
-├── CONTRIBUTING.md
-└── README.md
+ZAPRICA-osint/
+├── backend/            # FastAPI Python backend (Agents, LangGraph, API v1, Services, Tests)
+├── frontend/           # Next.js 14 React frontend (Dashboard, Investigation, Browser & Terminal UI)
+├── docker/             # Isolated Docker container sandbox definitions
+├── data/               # Persistent runtime evidence storage & browser profiles (gitignored)
+├── docs/               # ALL non-application files (Architecture, Reports, Specs, Tracking)
+│   ├── architecture/   # 3-Tier Multi-Agent architecture, schemas, and environment specs
+│   ├── reports/        # Independent audits, remediation reports, and test verification logs
+│   ├── specifications/ # PRD, acceptance criteria, security threat model, and deployment
+│   ├── tracking/       # Development logs, implementation status, and ADR decisions
+│   └── README.md       # Master documentation index and guide
+├── .cursorrules        # Agent and IDE development guidelines
+├── .env                # Local environment configuration
+├── .gitignore          # Version control ignore rules
+├── docker-compose.yml  # Multi-service production stack orchestration
+├── README.md           # Root overview and quickstart guide
+└── zaprica.db          # Local SQLite development database
 ```
 
-## Recommended technology baseline
+---
 
-| Area | Initial choice |
-|---|---|
-| Frontend | Next.js App Router, React, TypeScript |
-| UI | Tailwind CSS and an accessible component library |
-| Backend | Python, FastAPI, Pydantic |
-| Agent workflows | LangGraph |
-| Durable workflow engine | Temporal later, when justified by long-running/retry requirements |
-| Persistence | PostgreSQL, SQLAlchemy 2.x, Alembic |
-| Artifact storage | S3-compatible object storage |
-| Browser runtime | Playwright in an isolated worker environment |
-| Terminal runtime | Rootless Docker/container sandbox with seccomp and restricted egress |
-| Tool integration | Internal tool registry first; MCP adapters for compatible tools |
-| Cache/ephemeral coordination | Redis only when needed |
+## 3-Tier Multi-Agent Hierarchy
 
-Pin exact dependency versions in lockfiles during implementation. This document intentionally avoids claiming that unpinned version ranges are tested together.
+```
+                            +-----------------------------------+
+                            |         HUMAN INVESTIGATOR        |
+                            +-----------------+-----------------+
+                                              |
+                                              | (Authenticated Request)
+                                              v
++-----------------------------------------------------------------------------------------------+
+|                                    MAIN HEAD AI AGENT                                         |
+|                  (Strategic Planning, LangGraph Workflow, Findings Correlation)               |
++-------------------------------+-------------------------------+-------------------------------+
+                                |                               |
+        (TaskEnvelope: Scope,   |                               |  (TaskEnvelope: Scope,
+         Permitted Domains,     |                               |   Permitted Tools,
+         Execution Mode)        |                               |   Execution Mode)
+                                v                               v
++-----------------------------------------------+   +-------------------------------------------+
+|               BROWSER HEAD AGENT              |   |            TERMINAL HEAD AGENT            |
+|       (Dedicated Browser Environment)         |   |       (Dedicated Sandbox Environment)     |
++-----------------------+-----------------------+   +---------------------+---------------------+
+                        |                                                 |
+         +--------------v--------------+                   +--------------v--------------+
+         |    BROWSER POLICY ENGINE    |                   |  TERMINAL EXECUTION POLICY  |
+         |  (AUTOMATED, HUMAN_ASSISTED)|                   |  (Allowlist Specs, Pydantic)|
+         +--------------+--------------+                   +--------------+--------------+
+                        |                                                 |
+         +--------------v--------------+                   +--------------v--------------+
+         |       BROWSER MANAGER       |                   |    DOCKER SANDBOX MANAGER   |
+         | (Playwright Chromium Engine)|                   | (Isolated Non-Root Sandbox) |
+         +-----------------------------+                   +-----------------------------+
+```
 
-## Read the documents in this order
+---
 
-1. [`docs/PRD.md`](docs/PRD.md) — product goals, users, MVP and requirements.
-2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — components, data flow, agent protocol and tool onboarding.
-3. [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) — persistence model and indexes.
-4. [`docs/API_SPEC.yaml`](docs/API_SPEC.yaml) — versioned REST API contract.
-5. [`docs/SECURITY.md`](docs/SECURITY.md) — security boundaries and privacy controls.
-6. [`docs/ACCEPTANCE_CRITERIA.md`](docs/ACCEPTANCE_CRITERIA.md) — testable Given/When/Then scenarios.
-7. [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — local, staging and production operations.
+## Quickstart (Local Development)
 
-## MVP definition
+### 1. Prerequisites
+- Python 3.12+ / 3.13
+- Node.js 18+ & npm
+- Docker Engine / Docker Desktop (for containerized terminal sandboxes)
 
-The first vertical slice should support one authorized public website/domain investigation:
+### 2. Backend Setup
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate       # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+pytest backend/tests/ -v        # Run all 45 automated tests
+uvicorn app.main:app --reload --port 8000
+```
 
-1. An authenticated investigator creates an investigation and records its scope.
-2. The Main Head creates a small, reviewable plan.
-3. The Browser Head dispatches one Playwright worker to an approved, public target.
-4. The worker collects bounded page metadata/content and records provenance.
-5. Deterministic processors normalize and deduplicate the results without modifying originals.
-6. The Browser Head returns a findings package to the Main Head.
-7. The Main Head validates the package and generates a report with sources, timestamps, and limitations.
-8. The dashboard shows status, findings, evidence references, and the report.
+### 3. Frontend Setup
+```bash
+cd frontend
+npm install
+npm run build                   # Verify production compilation (16/16 routes)
+npm run dev -- -p 3000          # Launch dashboard at http://localhost:3000
+```
 
-Terminal execution, multiple specialist workers, automatic tool onboarding, graph visualization, and Temporal are later milestones. Tool onboarding should be represented in the data model and API from the beginning, but new tools must remain in draft/review until explicitly approved.
+### 4. Docker Compose Setup
+```bash
+docker compose up --build -d
+```
 
-## Safety boundary
+---
 
-ZAPRICA is intended for lawful, authorized, proportionate investigations using public information or assets for which the operator has permission. It must not provide unauthorized access, credential theft, stealth/evasion, malware, exploitation, or indiscriminate sensitive-personal-data collection. Model output is never an authorization decision. Browser and terminal access must be constrained by deterministic policy checks and isolated execution.
+## Documentation & Audits
 
-## Current state and next step
+All non-application documentation, architecture diagrams, audit reports, and engineering records are organized under [`docs/`](docs/README.md):
 
-This is a documentation-first starter. No application source code, Docker Compose file, database migration, or deployment credentials are included yet. The next engineering task is to turn Phase 1 of the PRD into a runnable monorepo scaffold and implement the MVP vertical slice.
-
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) before making changes.
+- **Architecture**: [`docs/architecture/UPDATED_ARCHITECTURE.md`](docs/architecture/UPDATED_ARCHITECTURE.md)
+- **Remediation Report**: [`docs/reports/REMEDIATION_REPORT.md`](docs/reports/REMEDIATION_REPORT.md)
+- **Security Audit**: [`docs/reports/SECURITY_REMEDIATION.md`](docs/reports/SECURITY_REMEDIATION.md)
+- **Integration Test Results**: [`docs/reports/INTEGRATION_TEST_RESULTS.md`](docs/reports/INTEGRATION_TEST_RESULTS.md)
+- **Issue Matrix & Release Assessment**: [`docs/reports/REMAINING_ISSUES.md`](docs/reports/REMAINING_ISSUES.md)
+- **Contributing Guidelines**: [`docs/specifications/CONTRIBUTING.md`](docs/specifications/CONTRIBUTING.md)
