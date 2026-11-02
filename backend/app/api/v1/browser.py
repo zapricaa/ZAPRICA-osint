@@ -250,3 +250,4 @@ async def stop_browser_session(
         await db.commit()
 
     return {"status": "stopped", "session_id": session_id}
+

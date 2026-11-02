@@ -193,3 +193,4 @@ async def get_terminal_task_logs(
         "duration_ms": log.duration_ms,
         "resource_usage": log.resource_usage,
     }
+

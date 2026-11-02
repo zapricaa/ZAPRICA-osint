@@ -64,3 +64,4 @@ class FileDocumentProcessingWorker:
             "stdout": result.stdout,
             "exit_code": result.exit_code,
         }
+

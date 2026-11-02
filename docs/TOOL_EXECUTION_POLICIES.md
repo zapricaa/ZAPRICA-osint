@@ -76,3 +76,4 @@ Administrators can inspect and configure execution policies via:
 
 > [!IMPORTANT]
 > The security invariant for Epieos is immutable: Attempting to enable `browser_automation_allowed: true` on `tool_id: epieos` is rejected by the backend with HTTP 400.
+

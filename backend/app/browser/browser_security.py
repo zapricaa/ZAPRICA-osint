@@ -93,3 +93,4 @@ class BrowserSecurityValidator:
                     )
 
         return hostname_lower, resolved_ips
+

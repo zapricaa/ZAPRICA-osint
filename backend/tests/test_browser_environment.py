@@ -155,3 +155,4 @@ async def test_browser_manager_lifecycle():
         # Close session cleanly
         await browser_manager.close_session(s_id)
         assert browser_session_manager.get_session(s_id).status == BrowserSessionStatus.STOPPED
+

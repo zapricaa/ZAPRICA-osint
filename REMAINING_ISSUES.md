@@ -40,3 +40,4 @@ While all acceptance criteria are met, the following optional operational enhanc
 ### 2.3 Additional OSINT CLI Adapter Registrations
 - **Current State**: Initial approved adapters are implemented for `dns_lookup`, `whois_lookup`, `metadata_extractor`, `subdomain_enum`, and `cert_inspector`.
 - **Enhancement**: As new tools are approved via TIMS (Tool Intelligence & Management System), register additional command specifications (e.g. `sherlock`, `theHarvester`, `amass`) within `TerminalExecutionPolicyValidator`.
+

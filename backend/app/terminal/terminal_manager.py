@@ -147,3 +147,4 @@ class TerminalManager:
 
 # Global terminal manager singleton
 terminal_manager = TerminalManager()
+

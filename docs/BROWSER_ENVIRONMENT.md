@@ -120,3 +120,4 @@ The `BrowserSecurityValidator` executes pre-flight and redirect checks:
 - **Loopback Blocking**: Blocks `127.0.0.0/8` and `::1`.
 - **Link-Local & Cloud Metadata Blocking**: Blocks `169.254.169.254` (AWS, GCP, Azure metadata services).
 - **DNS Re-Validation**: Resolves domains to IP addresses at navigation time and validates against CIDR denylists. Redirects are hooked via Playwright route handling to verify every intermediate URL hop.
+

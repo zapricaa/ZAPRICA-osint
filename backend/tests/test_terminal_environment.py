@@ -92,3 +92,4 @@ async def test_docker_fail_closed_guarantee(monkeypatch):
 
     assert exc.value.status_code == 503
     assert "fail-closed" in exc.value.detail.lower() or "forbidden" in exc.value.detail.lower()
+

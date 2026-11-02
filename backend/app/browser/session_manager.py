@@ -117,3 +117,4 @@ class BrowserSessionManager:
 
 # Global singleton instance
 browser_session_manager = BrowserSessionManager()
+

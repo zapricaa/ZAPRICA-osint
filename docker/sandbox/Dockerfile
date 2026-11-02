@@ -23,3 +23,4 @@ USER 10001:10001
 
 # Default no-op entrypoint
 CMD ["/bin/sh"]
+

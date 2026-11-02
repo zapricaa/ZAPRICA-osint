@@ -86,3 +86,4 @@ A comprehensive security audit of ZAPRICA was conducted following the implementa
 
 1. **Host-level Docker Daemon Security**: Ensure the Docker daemon on production Linux servers runs in rootless mode (`dockerd-rootless.sh`) for defense-in-depth.
 2. **Container Network Egress**: For CLI OSINT tools that do not require network connectivity (e.g. `exiftool`), explicitly pass `--network none` to the container sandbox.
+

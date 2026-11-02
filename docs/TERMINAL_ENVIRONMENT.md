@@ -92,3 +92,4 @@ The Terminal Head coordinates 4 specialized execution workers:
 
 - Real-time logging records `stdout`, `stderr`, `exit_code`, and `duration_ms` in `terminal_execution_logs`.
 - The Terminal Control Center frontend (`/terminal`) provides an interactive console viewer with color-coded status, syntax highlighting, and manual command dispatch for authorized investigators.
+

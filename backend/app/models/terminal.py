@@ -77,3 +77,4 @@ class TerminalExecutionLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     terminal_task: Mapped["TerminalTask"] = relationship("TerminalTask", back_populates="logs")
+

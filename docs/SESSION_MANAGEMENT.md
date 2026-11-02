@@ -70,3 +70,4 @@ Terminal sessions represent authenticated, sandboxed execution contexts inside D
 1. **No Shared Cookies**: Browser profile directories are partitioned by user ID (`data/browser_profiles/<user_id>/...`). User A cannot read or write User B's cookies or sessions.
 2. **No Host Access**: Terminal execution is confined to non-root containers. Docker daemon socket `/var/run/docker.sock` is strictly inaccessible to workers.
 3. **Audit Trail**: Every state change generates an event in the audit log table (`audit_logs`) and workspace timeline (`investigation_timelines`).
+

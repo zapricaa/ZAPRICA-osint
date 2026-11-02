@@ -265,3 +265,4 @@ class BrowserManager:
 
 # Global dedicated browser manager singleton
 browser_manager = BrowserManager()
+

@@ -84,3 +84,4 @@ class BrowserTask(Base):
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     session: Mapped["BrowserSession"] = relationship("BrowserSession", back_populates="browser_tasks")
+

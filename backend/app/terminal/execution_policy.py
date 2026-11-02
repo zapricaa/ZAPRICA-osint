@@ -88,3 +88,4 @@ class TerminalExecutionPolicyValidator:
                     )
 
         return spec
+

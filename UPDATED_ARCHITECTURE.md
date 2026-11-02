@@ -128,3 +128,4 @@ Both Browser Head and Terminal Head feed raw evidence through deterministic proc
 - **Browser Control Center (`/browser`)**: Real-time browser session control, URL navigation, proof screenshot preview, human login banner, and manual Epieos import modal.
 - **Terminal Control Center (`/terminal`)**: Interactive terminal console with sandbox status indicators, tool launcher form, and real-time ANSI log stream.
 - **Agent Control Center (`/agents`)**: Unified supervision dashboard displaying the operational states of the Main Head, Browser Head, and Terminal Head.
+
