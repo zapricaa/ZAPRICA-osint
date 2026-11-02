@@ -107,3 +107,17 @@
 - [x] Multi-stage `backend/Dockerfile` with non-root user and Playwright chromium.
 - [x] Multi-stage `frontend/Dockerfile` with non-root user and production server.
 - [x] `docker-compose.yml` for unified local stack with PostgreSQL 16 Alpine and healthchecks.
+
+## Phase 13: Dedicated Browser & Terminal Environments Upgrade [COMPLETED]
+- [x] Database migrations (`ed0d07b96175`): `browser_profiles`, `browser_sessions`, `terminal_environments`, `terminal_tasks`, `terminal_execution_logs`, `tool_execution_policies`, `website_automation_policies`.
+- [x] Browser profile isolation outside git with path traversal checks.
+- [x] Human login protocol with explicit `USER_AUTHENTICATED` investigator confirmation.
+- [x] Epieos special handling (`HUMAN_ASSISTED_ONLY`, manual access and manual result import).
+- [x] Website automation policies (`AUTOMATED_ALLOWED`, `HUMAN_ASSISTED_ONLY`, `API_ONLY`, `BLOCKED`).
+- [x] Hardened Docker container sandbox execution with read-only rootfs, non-root user, tmpfs `/workspace`, dropped capabilities, and strict fail-closed guarantee (no host execution fallback).
+- [x] Allowlisted command specs with Pydantic validation & injection rejection.
+- [x] Dedicated terminal workers (`CliOsintWorker`, `NetworkIntelligenceWorker`, `MetadataAnalysisWorker`, `FileDocumentProcessingWorker`) and `SortingAndIndexingWorker`.
+- [x] Enriched `TaskEnvelope` contracts with scope, permitted domains/tools, execution mode.
+- [x] Interactive `/browser` and `/terminal` workspaces in Next.js frontend with live telemetry.
+- [x] 45/45 automated pytest tests passing cleanly.
+- [x] 16/16 frontend routes statically compiled and verified via `npm run build`.

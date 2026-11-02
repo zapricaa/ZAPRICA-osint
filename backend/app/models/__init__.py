@@ -10,6 +10,9 @@ from app.models.tools import Tool, ToolVersion, AgentToolAssignment
 from app.models.evidence import EvidenceArtifact, Finding, FindingSource
 from app.models.entities import Entity, EntityRelationship
 from app.models.reports import Report, ApprovalRequest, AuditEvent
+from app.models.browser import BrowserProfile, BrowserSession, BrowserSessionEvent, BrowserTask
+from app.models.terminal import TerminalEnvironment, TerminalSession, TerminalTask, TerminalExecutionLog
+from app.models.policies import WebsiteAutomationPolicy, ToolExecutionPolicy, HumanApproval
 
 __all__ = [
     "Base",
@@ -40,4 +43,15 @@ __all__ = [
     "Report",
     "ApprovalRequest",
     "AuditEvent",
+    "BrowserProfile",
+    "BrowserSession",
+    "BrowserSessionEvent",
+    "BrowserTask",
+    "TerminalEnvironment",
+    "TerminalSession",
+    "TerminalTask",
+    "TerminalExecutionLog",
+    "WebsiteAutomationPolicy",
+    "ToolExecutionPolicy",
+    "HumanApproval",
 ]

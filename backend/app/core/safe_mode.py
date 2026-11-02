@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 class SafeModeState(BaseModel):
     safe_mode: bool = Field(default_factory=lambda: settings.ZAPRICA_SAFE_MODE)
     terminal_execution_enabled: bool = Field(default_factory=lambda: settings.TERMINAL_EXECUTION_ENABLED)
+    terminal_sandbox_required: bool = Field(default_factory=lambda: settings.TERMINAL_SANDBOX_REQUIRED)
+    browser_automation_enabled: bool = Field(default_factory=lambda: settings.BROWSER_AUTOMATION_ENABLED)
+    browser_session_autostart: bool = Field(default_factory=lambda: settings.BROWSER_SESSION_AUTOSTART)
     auto_investigation_enabled: bool = Field(default_factory=lambda: settings.AUTO_INVESTIGATION_ENABLED)
     auto_tool_installation_enabled: bool = Field(default_factory=lambda: settings.AUTO_TOOL_INSTALLATION)
     agents_state: Dict[str, str] = Field(
@@ -46,6 +49,14 @@ class SafeModeController:
         return self._state.terminal_execution_enabled
 
     @property
+    def is_browser_automation_enabled(self) -> bool:
+        return self._state.browser_automation_enabled
+
+    @property
+    def is_terminal_sandbox_required(self) -> bool:
+        return self._state.terminal_sandbox_required
+
+    @property
     def is_auto_investigation_enabled(self) -> bool:
         return self._state.auto_investigation_enabled
 
@@ -69,6 +80,16 @@ class SafeModeController:
         """Administratively disable terminal execution."""
         self._state.terminal_execution_enabled = False
         logger.info("TERMINAL EXECUTION DISABLED by admin '%s'", admin_username)
+
+    def enable_browser_automation(self, admin_username: str, reason: str) -> None:
+        """Administratively enable browser automation capabilities."""
+        self._state.browser_automation_enabled = True
+        logger.warning("BROWSER AUTOMATION ENABLED by admin '%s'. Reason: %s", admin_username, reason)
+
+    def disable_browser_automation(self, admin_username: str) -> None:
+        """Administratively disable browser automation capabilities."""
+        self._state.browser_automation_enabled = False
+        logger.info("BROWSER AUTOMATION DISABLED by admin '%s'", admin_username)
 
     def set_safe_mode(self, enabled: bool, admin_username: str) -> None:
         """Toggle safe mode globally."""

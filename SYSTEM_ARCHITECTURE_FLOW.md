@@ -55,41 +55,69 @@ flowchart TD
 
     %% 3-Tier Multi-Agent System
     subgraph S4 ["Multi-Agent Architecture (LangGraph Orchestration)"]
-        MAIN["MAIN HEAD AI AGENT\n(Supervisor Graph Runner)"]
-        BROWSER_HEAD["BROWSER HEAD AGENT\n(Web Reconnaissance)"]
-        TERMINAL_HEAD["TERMINAL HEAD AGENT\n(Sandboxed CLI OSINT)"]
+        MAIN["MAIN HEAD AI AGENT\n(Master Strategic Planner)"]
+        BROWSER_HEAD["BROWSER HEAD AGENT\n(Dedicated Browser Environment)"]
+        TERMINAL_HEAD["TERMINAL HEAD AGENT\n(Dedicated Sandbox Environment)"]
     end
 
     INV_SRV --> |"Trigger LangGraph Execution"| MAIN
-    MAIN --> |"Task Envelope"| BROWSER_HEAD
-    MAIN --> |"Task Envelope"| TERMINAL_HEAD
+    MAIN --> |"Task Envelope (Pydantic Contract)"| BROWSER_HEAD
+    MAIN --> |"Task Envelope (Pydantic Contract)"| TERMINAL_HEAD
 
-    %% Workers
-    subgraph S5 ["Browser Workers & Data Processors"]
-        PW["Playwright HTTP & DOM Worker"]
-        SSRF["SSRF Egress Firewall"]
-        CLEAN_B["Data Cleaning & Normalization"]
-        DEDUP_B["Duplicate Detection"]
+    %% Dedicated Browser Environment
+    subgraph S5 ["Dedicated Browser Environment & Workers"]
+        B_POLICY["Browser Policy Engine\n(AUTOMATED_ALLOWED, HUMAN_ASSISTED_ONLY, API_ONLY, BLOCKED)"]
+        B_SEC["Browser Security Validator\n(SSRF, RFC1918, Cloud Metadata Block)"]
+        B_PROF["Browser Profile Manager\n(Per-user isolated outside git)"]
+        B_MGR["Browser Manager\n(Playwright Chromium Persistent Context)"]
+        B_HUMAN["Human-in-the-Loop Protocol\n(LOGIN_REQUIRED -> USER_AUTHENTICATED)"]
+        EPIEOS["Epieos Special Handler\n(Manual user access & result import only)"]
+        CLEAN_B["Data Cleaning & Normalization Worker"]
+        DEDUP_B["Duplicate Detection Worker"]
+        SORT_B["Sorting & Indexing Worker"]
     end
 
-    BROWSER_HEAD --> SSRF
-    SSRF --> PW
-    PW --> CLEAN_B
+    BROWSER_HEAD --> B_POLICY
+    B_POLICY --> B_SEC
+    B_SEC --> B_MGR
+    B_PROF --> B_MGR
+    B_MGR --> B_HUMAN
+    B_POLICY --> EPIEOS
+    B_MGR --> CLEAN_B
     CLEAN_B --> DEDUP_B
-    DEDUP_B --> |"FindingsPackage"| BROWSER_HEAD
+    DEDUP_B --> SORT_B
+    SORT_B --> |"FindingsPackage"| BROWSER_HEAD
 
-    subgraph S6 ["Terminal Workers & Data Processors"]
-        GATEWAY["Controlled Tool Gateway\n(Strictly NO arbitrary shell)"]
-        ADAPTERS["Approved Adapters\n(dns_lookup, whois_lookup, etc.)"]
-        CLEAN_T["Normalization & Classification"]
-        DEDUP_T["Duplicate Detection"]
+    %% Dedicated Terminal Environment
+    subgraph S6 ["Dedicated Terminal Sandbox & Workers"]
+        T_POLICY["Terminal Execution Policy\n(Allowlisted specs & Pydantic validation)"]
+        T_MGR["Terminal Manager\n(Task coordinator & session tracker)"]
+        DOCKER["Docker Sandbox Manager\n(Alpine, read-only rootfs, tmpfs /workspace,\nnon-root 10001:10001, cap-drop=ALL, pids=64)"]
+        FAIL_CLOSED["Fail-Closed Guard\n(Host exec BLOCKED - Docker required)"]
+        W_CLI["CLI OSINT Worker"]
+        W_NET["Network Intelligence Worker"]
+        W_META["Metadata Analysis Worker"]
+        W_DOC["File & Document Worker"]
+        CLEAN_T["Normalization & Classification Worker"]
+        DEDUP_T["Duplicate Detection Worker"]
+        SORT_T["Sorting & Indexing Worker"]
     end
 
-    TERMINAL_HEAD --> GATEWAY
-    GATEWAY --> ADAPTERS
-    ADAPTERS --> CLEAN_T
+    TERMINAL_HEAD --> T_POLICY
+    T_POLICY --> T_MGR
+    T_MGR --> DOCKER
+    DOCKER -.->|If Docker offline| FAIL_CLOSED
+    DOCKER --> W_CLI
+    DOCKER --> W_NET
+    DOCKER --> W_META
+    DOCKER --> W_DOC
+    W_CLI --> CLEAN_T
+    W_NET --> CLEAN_T
+    W_META --> CLEAN_T
+    W_DOC --> CLEAN_T
     CLEAN_T --> DEDUP_T
-    DEDUP_T --> |"FindingsPackage"| TERMINAL_HEAD
+    DEDUP_T --> SORT_T
+    SORT_T --> |"FindingsPackage"| TERMINAL_HEAD
 
     %% Evidence Pipeline
     BROWSER_HEAD --> |"Raw Evidence Artifact + SHA-256"| EVD_SRV

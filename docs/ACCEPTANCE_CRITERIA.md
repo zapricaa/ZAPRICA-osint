@@ -232,3 +232,42 @@ Use these scenarios as executable acceptance tests. IDs should be referenced in 
 **Given** a user has no access to an investigation  
 **When** the user requests its JSON/CSV/report export  
 **Then** no content or artifact URL is returned.
+
+## Feature 9 — Dedicated Browser Environment
+
+### AC-BROWSER-01: Browser profile directory isolation outside git
+**Given** an investigator launches a browser session  
+**When** the profile directory is created  
+**Then** it is stored in `data/browser_profiles/<user_id>/` outside version control, and path traversal strings (`..`, `/`, `\`) are strictly rejected with HTTP 400.
+
+### AC-BROWSER-02: Human login confirmation protocol
+**Given** a browser session encounters a login or authentication challenge  
+**When** the session transitions to `LOGIN_REQUIRED` and `AUTHENTICATING`  
+**Then** automated actions are paused until an authenticated investigator explicitly submits `confirm-authentication`, transitioning to `USER_AUTHENTICATED`.
+
+### AC-BROWSER-03: Website automation policy enforcement
+**Given** a target domain is configured with an automation policy (`AUTOMATED_ALLOWED`, `HUMAN_ASSISTED_ONLY`, `API_ONLY`, `BLOCKED`)  
+**When** an automated action is proposed  
+**Then** the policy engine enforces the allowed actions and rejects prohibited operations with HTTP 403.
+
+### AC-BROWSER-04: Epieos special handling
+**Given** the target domain is `epieos.com` or tool is `epieos`  
+**When** any automated querying or scraping is attempted  
+**Then** it is strictly prohibited (`HUMAN_ASSISTED_ONLY`), and data entry is permitted solely via manual operator access and manual result import.
+
+## Feature 10 — Dedicated Terminal Container Sandbox
+
+### AC-TERMINAL-01: Container sandbox isolation
+**Given** a terminal command is approved for execution  
+**When** the container is launched  
+**Then** it runs non-root (`10001:10001`), with read-only rootfs, tmpfs `/workspace`, dropped Linux capabilities, and no host Docker socket mounted.
+
+### AC-TERMINAL-02: Command allowlist and argument injection defense
+**Given** an agent proposes a terminal task  
+**When** the command spec or arguments contain shell metacharacters (`;`, `&`, `|`, `` ` ``, `$`) or unapproved binaries  
+**Then** the execution policy validator rejects the task before container dispatch.
+
+### AC-TERMINAL-03: Strict fail-closed guarantee
+**Given** Docker daemon is offline or container sandbox initialization fails  
+**When** a terminal command execution is requested  
+**Then** the system fails closed with HTTP 503, strictly prohibiting fallback execution on the host operating system.

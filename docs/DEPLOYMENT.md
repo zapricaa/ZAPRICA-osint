@@ -56,6 +56,22 @@ LLM_PROVIDER=disabled
 LLM_API_KEY=
 JWT_SIGNING_KEY=replace-with-secret-manager-value
 LOG_LEVEL=INFO
+
+# Safe Mode & Isolation Configuration
+ZAPRICA_SAFE_MODE=true
+TERMINAL_EXECUTION_ENABLED=false
+AUTO_INVESTIGATION_ENABLED=false
+AUTO_TOOL_INSTALLATION=false
+
+# Dedicated Browser Environment
+BROWSER_AUTOMATION_ENABLED=true
+BROWSER_SESSION_AUTOSTART=false
+BROWSER_HEADLESS=true
+BROWSER_PROFILES_DIR=data/browser_profiles
+
+# Dedicated Terminal Sandbox
+TERMINAL_SANDBOX_REQUIRED=true
+DOCKER_SANDBOX_IMAGE=zaprica-sandbox:latest
 ```
 
 These are illustrative variable names, not production values. Do not commit a real `.env`. In production, use a secret manager or platform secret injection. Rotate secrets and scope them per service.

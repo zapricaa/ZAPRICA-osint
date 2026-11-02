@@ -103,11 +103,50 @@ ZAPRICA is an enterprise-grade, multi-agent AI-powered OSINT investigation platf
 - [x] `frontend/Dockerfile`: Multi-stage Node 20 Alpine, production build, non-root `nextjs` user execution.
 - [x] `docker-compose.yml`: PostgreSQL 16 Alpine with healthcheck, FastAPI backend, Next.js frontend, persistent volumes, and isolated networking.
 
+### Phase 7: Dedicated Browser & Terminal Environments Upgrade
+- [x] **Database Schema & Migrations (`ed0d07b96175`)**:
+  - `BrowserProfile`, `BrowserSession`, `BrowserSessionEvent`, `BrowserTask`.
+  - `TerminalEnvironment`, `TerminalSession`, `TerminalTask`, `TerminalExecutionLog`.
+  - `WebsiteAutomationPolicy`, `ToolExecutionPolicy`, `HumanApproval`.
+- [x] **Dedicated Browser Environment**:
+  - `BrowserSecurityValidator`: Enforces egress controls blocking RFC 1918, loopbacks, link-local, and cloud metadata (`169.254.169.254`).
+  - `BrowserPolicyEngine`: Enforces domain automation policies (`AUTOMATED_ALLOWED`, `HUMAN_ASSISTED_ONLY`, `API_ONLY`, `BLOCKED`).
+  - `BrowserProfileManager`: Isolates browser profiles per user outside git with path traversal defense (`..`, `/`, `\`).
+  - `BrowserSessionManager`: State machine tracking session states with investigator `confirm_user_authenticated`.
+  - `BrowserManager`: Playwright Chromium persistent context execution, screenshot capture, DOM parsing, and content extraction.
+  - **Epieos Special Handling**: Strictly configured as `HUMAN_ASSISTED_ONLY` with manual user access and manual result import. Automated scraping is prohibited by policy.
+- [x] **Dedicated Terminal Sandbox Environment**:
+  - `TerminalExecutionPolicyValidator`: Allowlisted command specifications (`dns_lookup`, `whois_lookup`, `metadata_extractor`, `subdomain_enum`, `cert_inspector`) with Pydantic argument validation and shell meta-character injection defense.
+  - `DockerSandboxManager`: Hardened container execution with `--read-only`, `--tmpfs /workspace`, non-root `--user 10001:10001`, `--cap-drop=ALL`, `--security-opt=no-new-privileges`, `--pids-limit=64`.
+  - **Fail-Closed Guarantee**: Strictly prohibits host execution if Docker is unreachable; returns HTTP 503 instead of falling back to the Windows host.
+  - `TerminalManager`: Coordinates container execution, exit codes, and duration telemetry.
+- [x] **Agent Workers Hierarchy**:
+  - Terminal Workers: `CliOsintWorker`, `NetworkIntelligenceWorker`, `MetadataAnalysisWorker`, `FileDocumentProcessingWorker`.
+  - Processing Workers: `SortingAndIndexingWorker`, `DataCleaningWorker`, `DuplicateDetectionWorker`.
+  - Enriched `TaskEnvelope` contracts with `initiating_user_id`, `parent_agent`, `authorized_scope`, `permitted_domains`, `permitted_tools`, `execution_mode`, `approval_requirements`, `timeout_seconds`.
+- [x] **API Endpoints**:
+  - `/api/v1/browser/sessions`: CRUD, navigation, screenshots, authentication confirmation, manual result import.
+  - `/api/v1/terminal/environments` and `/api/v1/terminal/tasks`: Environments and sandboxed task execution.
+  - `/api/v1/agents/status`: Live multi-agent fleet supervision metrics.
+  - `/api/v1/tools/{tool_id}/execution-policy`: Tool execution policy inspection and admin updates.
+- [x] **Frontend Workspaces**:
+  - `/browser`: Browser Control Center with session launch, live URL navigation, screenshot capture, human login prompt, "CONFIRM USER AUTHENTICATED" action, and Epieos manual import modal.
+  - `/terminal`: Terminal Control Center with sandbox status banner, approved tool selector, dispatch button, and real-time black console window.
+  - `/agents`: Agent Control Center with direct workspace launch buttons and live telemetry.
+  - `Sidebar.tsx`: Global navigation links for Browser Workspace (`/browser`) and Terminal Workspace (`/terminal`).
+- [x] **Quality Assurance & Verification**:
+  - 45/45 backend pytest unit & integration tests passing cleanly.
+  - Next.js production build compiling with 0 errors across all 16 routes.
+
 ---
 
 ## 3. What Needs to Be Done (Pending & Next Steps)
 
-- [ ] Complete frontend Next.js production build verification.
-- [ ] Run full end-to-end integration smoke tests across backend and frontend.
-- [ ] Finalize documentation synchronization across `docs/PRD.md`, `docs/DATABASE_SCHEMA.md`, and `docs/ACCEPTANCE_CRITERIA.md`.
-- [ ] Execute final git commit and push to `origin main`.
+- [ ] Update core project documentation (`docs/PRD.md`, `docs/ARCHITECTURE.md`, `docs/DATABASE_SCHEMA.md`, `docs/API_SPEC.yaml`, `docs/SECURITY.md`, `docs/ACCEPTANCE_CRITERIA.md`, `docs/DEPLOYMENT.md`).
+- [ ] Generate comprehensive final deliverables:
+  - `IMPLEMENTATION_REPORT.md`
+  - `TEST_RESULTS.md`
+  - `SECURITY_AUDIT.md`
+  - `UPDATED_ARCHITECTURE.md`
+  - `REMAINING_ISSUES.md`
+- [ ] Execute git commit and push to `origin main`.

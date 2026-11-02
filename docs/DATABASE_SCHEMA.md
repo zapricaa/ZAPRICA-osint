@@ -175,6 +175,41 @@ Do not infer identity or relationships from name similarity alone. Relationships
 
 Append-only to application roles. Send required security logs to a protected log sink. Retention must follow the applicable legal and operational requirements.
 
+### 3.8 Dedicated Browser & Terminal Environments
+
+#### `browser_profiles`
+`id uuid PK`, `user_id uuid FK users`, `profile_name text`, `profile_path text`, `is_active boolean`, `created_at`, `updated_at`. Isolated per user outside git.
+
+#### `browser_sessions`
+`id uuid PK`, `investigation_id uuid FK investigations`, `user_id uuid FK users`, `profile_name text`, `status text` (`DISCONNECTED`, `STARTING`, `LOGIN_REQUIRED`, `AUTHENTICATING`, `USER_AUTHENTICATED`, `READY`, `BUSY`, `SESSION_EXPIRED`, `STOPPED`, `ERROR`), `current_url text`, `auth_state jsonb`, `started_at`, `last_activity_at`, `ended_at`.
+
+#### `browser_session_events`
+`id uuid PK`, `session_id uuid FK browser_sessions`, `event_type text`, `target_url text`, `details jsonb`, `created_at`.
+
+#### `browser_tasks`
+`id uuid PK`, `session_id uuid FK browser_sessions`, `task_envelope_id uuid nullable`, `action text`, `target_url text`, `status text`, `error_message text`, `result_metadata jsonb`, `created_at`, `completed_at`.
+
+#### `terminal_environments`
+`id uuid PK`, `workspace_id uuid FK workspaces`, `environment_type text` (`DOCKER_CONTAINER`), `container_id text`, `status text` (`READY`, `BUSY`, `OFFLINE`, `TERMINATED`), `created_at`, `updated_at`.
+
+#### `terminal_sessions`
+`id uuid PK`, `investigation_id uuid FK investigations`, `user_id uuid FK users`, `environment_id uuid FK terminal_environments`, `status text`, `started_at`, `last_activity_at`, `ended_at`.
+
+#### `terminal_tasks`
+`id uuid PK`, `session_id uuid FK terminal_sessions`, `tool_id text`, `command_spec text`, `arguments jsonb`, `status text`, `exit_code integer`, `duration_ms integer`, `created_at`, `completed_at`.
+
+#### `terminal_execution_logs`
+`id uuid PK`, `task_id uuid FK terminal_tasks`, `stdout text`, `stderr text`, `exit_code integer`, `duration_ms integer`, `created_at`.
+
+#### `website_automation_policies`
+`id uuid PK`, `domain_pattern text UNIQUE`, `policy_type text` (`AUTOMATED_ALLOWED`, `HUMAN_ASSISTED_ONLY`, `API_ONLY`, `BLOCKED`), `browser_automation boolean`, `automated_queries boolean`, `automated_extraction boolean`, `agent_site_control boolean`, `manual_user_access boolean`, `manual_result_import boolean`, `notes text`, `created_at`, `updated_at`.
+
+#### `tool_execution_policies`
+`id uuid PK`, `tool_id text UNIQUE`, `execution_mode text`, `allowed_destinations jsonb`, `blocked_destinations jsonb`, `requires_human_approval boolean`, `browser_automation_allowed boolean`, `container_sandbox_required boolean`, `max_execution_time_seconds integer`, `created_at`, `updated_at`.
+
+#### `human_approvals`
+`id uuid PK`, `investigation_id uuid FK investigations`, `task_id uuid nullable`, `tool_id text`, `requested_action text`, `status text` (`PENDING`, `APPROVED`, `REJECTED`, `EXPIRED`), `requested_by_user_id uuid FK users`, `approved_by_user_id uuid FK users nullable`, `justification text`, `decision_notes text`, `created_at`, `decided_at`.
+
 ## 4. Enums and controlled states
 
 Prefer PostgreSQL enums only for stable states; use lookup/config tables for categories that change often.

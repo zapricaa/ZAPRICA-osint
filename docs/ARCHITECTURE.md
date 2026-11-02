@@ -101,13 +101,24 @@ Main Head graph nodes:
 
 Use a persistent LangGraph checkpointer in deployed environments. Keep investigation records and evidence in the application database/object store; do not treat an LLM context window as the system of record.
 
-### 4.4 Browser Head Agent
+### 4.4 Browser Head Agent & Dedicated Browser Environment
 
-Owns browser-specific task decomposition, worker scheduling, browser context lifecycle, rate limits, target allowlists, and result review. The first worker should handle a narrow website metadata/content extraction use case. Browser workers should not receive unrestricted browser access or shared cookies across investigations.
+Owns browser-specific task decomposition, worker scheduling, browser context lifecycle, rate limits, target allowlists, and result review.
+- Operates a dedicated Playwright Chromium browser environment (not HTTPX).
+- **Profile Isolation**: Profiles are isolated per user in `data/browser_profiles/<user_id>/` outside version control, with path traversal prevention.
+- **Human-in-the-Loop Login Protocol**: Sessions requiring manual authentication or 2FA transition through `LOGIN_REQUIRED` -> `AUTHENTICATING` -> `USER_AUTHENTICATED`. Investigators take manual control and explicitly click "CONFIRM USER AUTHENTICATED" before automation resumes.
+- **Website Automation Policies**: Evaluates target domains against `AUTOMATED_ALLOWED`, `HUMAN_ASSISTED_ONLY`, `API_ONLY`, and `BLOCKED`.
+- **Epieos Special Handling**: Strictly configured as `HUMAN_ASSISTED_ONLY` with manual user access and manual result import. Automated scraping and queries are prohibited by policy.
+- **SSRF & Egress Security**: Validates DNS, blocks RFC 1918, loopbacks, and cloud metadata (`169.254.169.254`) on all navigation hops and redirects.
 
-### 4.5 Terminal Head Agent
+### 4.5 Terminal Head Agent & Dedicated Sandbox Environment
 
-Owns approved CLI task decomposition and isolated runtime lifecycle. The first release can leave Terminal Head disabled or operate it only against a tiny allowlisted set of benign, read-only tools. It must not expose a general shell to the LLM. Each executable operation is an adapter with fixed executable identity, schema-validated arguments, timeout, limits, and an explicit permission profile.
+Owns approved CLI task decomposition and isolated runtime lifecycle.
+- **Docker Container Sandbox**: Executes commands exclusively inside non-root Alpine container sandboxes (`--read-only` rootfs, `--tmpfs /workspace:rw,noexec,nosuid,size=64m`, `--user 10001:10001`, `--cap-drop=ALL`, `--security-opt=no-new-privileges`, `--pids-limit=64`).
+- **Strict Fail-Closed Guarantee**: Under NO circumstances does the agent execute commands on the Windows host. If Docker is offline or disabled, execution is rejected with HTTP 503.
+- **Command Allowlist & Injection Defense**: Commands must match allowlisted specifications (`dns_lookup`, `whois_lookup`, `metadata_extractor`, `subdomain_enum`, `cert_inspector`). Shell chaining, pipes, and metacharacters are strictly rejected.
+- **Terminal Workers**: CLI OSINT Worker, Network Intelligence Worker, Metadata Analysis Worker, File & Document Worker.
+- **Observability**: Raw execution logs capture stdout, stderr, exit code, and duration in `terminal_execution_logs`.
 
 ### 4.6 Workers and deterministic processors
 

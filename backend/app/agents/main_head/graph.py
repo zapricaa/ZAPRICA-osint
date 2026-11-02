@@ -284,15 +284,27 @@ class MainHeadGraphRunner:
             findings_packages = []
 
             for t_dict in state.get("tasks", []):
+                allowed_scope = state.get("scope", {})
+                permitted_domains = allowed_scope.get("allowed_targets", [state["target"]])
+                user_id_str = str(state.get("initiating_user_id") or "")
+
                 t_env = TaskEnvelope(
                     task_id=t_dict["task_id"],
                     investigation_id=state["investigation_id"],
+                    initiating_user_id=user_id_str,
+                    parent_agent="main_head",
                     assigned_agent=t_dict["assigned_agent"],
                     capability=t_dict["capability"],
                     objective=t_dict["objective"],
-                    scope_ref=t_dict["scope_ref"],
-                    allowed_tool_ids=t_dict["allowed_tool_ids"],
+                    task_objective=t_dict["objective"],
+                    scope_ref=t_dict.get("scope_ref", state["investigation_id"]),
+                    authorized_scope=allowed_scope,
+                    permitted_domains=permitted_domains,
+                    permitted_tools=t_dict.get("allowed_tool_ids", []),
+                    allowed_tool_ids=t_dict.get("allowed_tool_ids", []),
+                    execution_mode=state.get("mode", "AUTOMATED"),
                     input=t_dict["input"],
+                    timeout_seconds=t_dict.get("timeout_seconds", 30),
                 )
 
                 if t_dict["assigned_agent"] == "browser_head":

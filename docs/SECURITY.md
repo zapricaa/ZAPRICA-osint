@@ -66,11 +66,13 @@ The model cannot change the scope. A follow-up outside scope must pause for user
 
 ## 5. Browser security
 
-- Run browser automation in a separate, unprivileged worker environment.
-- Use a fresh isolated browser context per investigation/task unless an explicitly approved session design requires otherwise.
-- Do not reuse investigator cookies or authenticated browser profiles by default.
+- Run browser automation in a separate, unprivileged worker environment using persistent Playwright contexts.
+- **Browser Profile Isolation**: Profiles are isolated per user under `data/browser_profiles/<user_id>/` outside version control, with path traversal checks (`..`, `/`, `\`).
+- **Human-in-the-Loop Login Protocol**: Sessions requiring authentication transition to `LOGIN_REQUIRED` and wait for explicit investigator confirmation (`USER_AUTHENTICATED`). Automated form filling of credentials is prohibited.
+- **Website Automation Policy**: Enforce per-domain policies (`AUTOMATED_ALLOWED`, `HUMAN_ASSISTED_ONLY`, `API_ONLY`, `BLOCKED`).
+- **Epieos Special Invariant**: `epieos.com` is strictly `HUMAN_ASSISTED_ONLY`. Automated scraping and automated queries are prohibited; manual user access and manual result import only.
 - Route requests through an egress enforcement layer.
-- Block loopback, RFC1918/private, link-local, unique-local, reserved, multicast, and cloud metadata destinations unless a separately authorized internal test scope explicitly permits them.
+- Block loopback, RFC1918/private, link-local, unique-local, reserved, multicast, and cloud metadata destinations (`169.254.169.254`) unless a separately authorized internal test scope explicitly permits them.
 - Validate DNS answers and redirects to mitigate DNS rebinding and redirect-based SSRF.
 - Restrict schemes to approved schemes (normally HTTPS; HTTP only where explicitly permitted).
 - Set navigation, response-size, download-size, and total runtime limits.
@@ -81,9 +83,17 @@ The model cannot change the scope. A follow-up outside scope must pause for user
 ## 6. Terminal execution security
 
 - Do not provide a general interactive shell to an LLM.
-- Tool adapters map a registered tool ID to a fixed executable and a validated argument schema. No `shell=True` or string concatenation of model output.
-- Use rootless containers where supported; run as non-root even inside the container.
-- Use seccomp, drop Linux capabilities, set `no-new-privileges`, use read-only root filesystem, bounded tmpfs/workspace, CPU/memory/PID/file-size/time limits, and no privileged mode or host namespace sharing.
+- **Strict Fail-Closed Guarantee**: Under NO circumstances does ZAPRICA execute agent commands directly on the Windows host. If Docker is unavailable or offline, execution fails closed with HTTP 503.
+- Tool adapters map a registered tool ID to a fixed executable specification and a validated Pydantic argument schema. Shell metacharacters (`;`, `&`, `|`, `` ` ``, `$`, `>`, `<`) are rejected.
+- Execute exclusively in isolated container sandboxes:
+  - Non-root user: `--user 10001:10001`
+  - Read-only root filesystem: `--read-only`
+  - Volatile scratch space: `--tmpfs /workspace:rw,noexec,nosuid,size=64m`
+  - Privilege restriction: `--security-opt=no-new-privileges`
+  - Linux capabilities: `--cap-drop=ALL`
+  - PID limit: `--pids-limit=64`
+  - Memory limit: `-m 256m`
+  - CPU limit: `--cpus 0.5`
 - Mount only task-specific input and output directories. Never mount Docker socket, host home, SSH agent, or sensitive host paths.
 - Restrict egress to approved destinations and protocols; default to no network for tools that do not require it.
 - Pin images by digest, scan images/dependencies, and remove containers after each task.

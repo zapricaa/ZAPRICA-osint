@@ -72,3 +72,11 @@ ZAPRICA is an enterprise-grade AI-powered OSINT investigation platform featuring
 | AC-OPS-04 | Trace ID propagates through agent calls | Verified | `backend/tests/test_investigations.py` |
 | AC-SAFE-01 | Safe startup mode enables read-only check and sets IDLE agents | Verified | `backend/tests/test_ai_brain.py` |
 | AC-AUTH-INV | Invite-only authentication blocks public signup | Verified | `backend/tests/test_auth.py` |
+| AC-BROWSER-01 | User profile directory isolation outside git with traversal defense | Verified | `backend/tests/test_browser_environment.py` |
+| AC-BROWSER-02 | Human login confirmation (`USER_AUTHENTICATED`) required | Verified | `backend/tests/test_browser_environment.py` |
+| AC-BROWSER-03 | Website automation policies enforced (`AUTOMATED_ALLOWED`, `BLOCKED`, etc.) | Verified | `backend/tests/test_browser_environment.py` |
+| AC-BROWSER-04 | Epieos special handling (`HUMAN_ASSISTED_ONLY`, manual result import) | Verified | `backend/tests/test_browser_environment.py` |
+| AC-TERMINAL-01 | Container sandbox execution with dropped caps, read-only rootfs, non-root | Verified | `backend/tests/test_terminal_environment.py` |
+| AC-TERMINAL-02 | Allowlisted command specs with Pydantic validation & injection defense | Verified | `backend/tests/test_terminal_environment.py` |
+| AC-TERMINAL-03 | Strict fail-closed guarantee (Windows host execution prohibited) | Verified | `backend/tests/test_terminal_environment.py` |
+| AC-TOOL-POL-01 | Tool-level execution policy configuration & Epieos invariant guard | Verified | `backend/tests/test_terminal_environment.py` |

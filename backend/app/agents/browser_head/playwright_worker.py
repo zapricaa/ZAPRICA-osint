@@ -1,103 +1,81 @@
-import re
-from typing import Dict, Any, Tuple
-import httpx
+"""Playwright Browser Worker utilizing dedicated BrowserManager persistent context."""
 
-from app.agents.browser_head.ssrf_filter import SSRFEgressFilter
+import uuid
+from typing import Dict, Any, Tuple, Optional
+from app.browser.browser_manager import browser_manager
+from app.browser.browser_policy import BrowserPolicyEngine, PolicyType
+from app.browser.session_manager import browser_session_manager, BrowserSessionStatus
 
 
 class PlaywrightBrowserWorker:
-    """Browser worker that collects public website metadata and content with SSRF egress enforcement."""
+    """Dedicated browser worker using Playwright persistent contexts and security enforcement."""
 
     @classmethod
     async def extract_website_intelligence(
         cls,
         target_url: str,
-        timeout_seconds: int = 20,
-    ) -> Tuple[bytes, Dict[str, Any]]:
-        # 1. Enforce SSRF Egress Filter (AC-SEC-02)
-        hostname, resolved_ips = SSRFEgressFilter.validate_url(target_url)
+        investigation_id: uuid.UUID,
+        user_id: uuid.UUID,
+        session_id: Optional[str] = None,
+        timeout_seconds: int = 30,
+    ) -> Tuple[bytes, Dict[str, Any], Optional[bytes]]:
+        """
+        Navigates and extracts verified page content using Playwright.
+        Returns (raw_html_bytes, extracted_metadata, screenshot_bytes).
+        """
+        # 1. Ensure an active dedicated browser session exists
+        if not session_id or not browser_session_manager.get_session(session_id):
+            active_state = await browser_manager.start_session(
+                investigation_id=investigation_id,
+                user_id=user_id,
+            )
+            session_id = active_state.session_id
 
-        # 2. Fetch page content using secure HTTP client with timeout & limits
-        headers = {
-            "User-Agent": "ZAPRICA-OSINT-Intelligence-Bot/1.0 (+https://zaprica.local/bot)",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-        }
+        # 2. Check Website Automation Policy before doing anything
+        parsed_domain = target_url.split("://", 1)[1].split("/", 1)[0] if "://" in target_url else target_url
+        policy = BrowserPolicyEngine.get_policy_for_domain(parsed_domain)
 
-        async with httpx.AsyncClient(
-            timeout=float(timeout_seconds),
-            follow_redirects=True,
-            verify=True,
-            max_redirects=5,
-        ) as client:
-            resp = await client.get(target_url, headers=headers)
+        # 3. Navigate the persistent Playwright browser
+        nav_result = await browser_manager.navigate(
+            session_id=session_id,
+            target_url=target_url,
+            timeout_ms=timeout_seconds * 1000,
+        )
 
-            # Re-check redirect URL destination if redirect occurred
-            if str(resp.url) != target_url:
-                SSRFEgressFilter.validate_url(str(resp.url))
+        # 4. Handle HUMAN_ASSISTED_ONLY policy (e.g. Epieos, banking, gov sites)
+        if policy.policy_type == PolicyType.HUMAN_ASSISTED_ONLY:
+            # Mark that manual investigator interaction is needed
+            browser_session_manager.update_status(
+                session_id=session_id,
+                status=BrowserSessionStatus.LOGIN_REQUIRED,
+                current_url=nav_result["current_url"],
+            )
+            raw_placeholder = (
+                f"<!-- ZAPRICA HUMAN_ASSISTED_ONLY: Domain {parsed_domain} opened for manual operator access -->"
+            ).encode("utf-8")
+            metadata = {
+                "url": nav_result["current_url"],
+                "title": f"Manual Operator Session: {parsed_domain}",
+                "policy_type": policy.policy_type.value,
+                "human_assisted_required": True,
+                "note": policy.notes or "Automated scraping disabled. Awaiting manual investigator workflow.",
+                "resolved_ips": nav_result.get("resolved_ips", []),
+                "http_status": nav_result.get("http_status", 200),
+            }
+            # Optional screenshot of login/landing screen for provenance
+            screenshot = await browser_manager.capture_screenshot(session_id)
+            return raw_placeholder, metadata, screenshot
 
-            raw_bytes = resp.content
-            html_text = resp.text
+        # 5. Extract full DOM content and metadata for AUTOMATED_ALLOWED policy
+        raw_bytes, extracted = await browser_manager.extract_content(session_id)
+        extracted["http_status"] = nav_result.get("http_status", 200)
+        extracted["resolved_ips"] = nav_result.get("resolved_ips", [])
+        extracted["policy_type"] = policy.policy_type.value
 
-        # 3. Parse Metadata & Technical Indicators
-        extracted = cls._parse_html_metadata(html_text, dict(resp.headers), str(resp.url))
-        extracted["resolved_ips"] = resolved_ips
-        extracted["http_status"] = resp.status_code
+        # 6. Capture full viewport screenshot
+        try:
+            screenshot_bytes = await browser_manager.capture_screenshot(session_id)
+        except Exception:
+            screenshot_bytes = None
 
-        return raw_bytes, extracted
-
-    @staticmethod
-    def _parse_html_metadata(html_content: str, response_headers: Dict[str, str], current_url: str) -> Dict[str, Any]:
-        """Extract title, meta tags, headers, tech stack clues, contacts, and links."""
-        metadata: Dict[str, Any] = {
-            "url": current_url,
-            "title": "",
-            "meta_tags": {},
-            "tech_stack": [],
-            "contacts": [],
-            "external_links": [],
-            "headings": [],
-        }
-
-        # 1. Title
-        title_match = re.search(r"<title[^>]*>(.*?)</title>", html_content, re.IGNORECASE | re.DOTALL)
-        if title_match:
-            metadata["title"] = title_match.group(1).strip()
-
-        # 2. Server headers (tech stack)
-        for h, v in response_headers.items():
-            h_low = h.lower()
-            if h_low in ["server", "x-powered-by", "x-generator", "via"]:
-                metadata["tech_stack"].append({"type": h_low, "value": v})
-
-        # 3. Meta tags
-        meta_matches = re.findall(r'<meta\s+([^>]+)>', html_content, re.IGNORECASE)
-        for meta in meta_matches:
-            name_match = re.search(r'(?:name|property)\s*=\s*["\']([^"\']+)["\']', meta, re.IGNORECASE)
-            content_match = re.search(r'content\s*=\s*["\']([^"\']+)["\']', meta, re.IGNORECASE)
-            if name_match and content_match:
-                name = name_match.group(1).strip()
-                content = content_match.group(1).strip()
-                metadata["meta_tags"][name] = content
-                if name.lower() in ["generator", "author"]:
-                    metadata["tech_stack"].append({"type": name.lower(), "value": content})
-
-        # 4. Contacts (emails, tel)
-        email_matches = set(re.findall(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', html_content))
-        for email in email_matches:
-            if not email.endswith(".png") and not email.endswith(".jpg"):
-                metadata["contacts"].append({"type": "email", "value": email})
-
-        # 5. Headings (h1)
-        h1_matches = re.findall(r'<h1[^>]*>(.*?)</h1>', html_content, re.IGNORECASE | re.DOTALL)
-        for h1 in h1_matches:
-            clean_h1 = re.sub(r'<[^>]+>', '', h1).strip()
-            if clean_h1:
-                metadata["headings"].append(clean_h1)
-
-        # 6. External links
-        href_matches = set(re.findall(r'href\s*=\s*["\'](https?://[^"\']+)["\']', html_content, re.IGNORECASE))
-        for href in list(href_matches)[:15]:
-            metadata["external_links"].append(href)
-
-        return metadata
+        return raw_bytes, extracted, screenshot_bytes

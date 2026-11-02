@@ -5,19 +5,29 @@ import uuid
 
 
 class TaskEnvelope(BaseModel):
-    schema_version: str = "1.0"
+    """Structured Pydantic contract for tasks dispatched by Main Head to Sub-Heads."""
+    schema_version: str = "2.0"
     task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     investigation_id: str
+    initiating_user_id: Optional[str] = None
+    parent_agent: str = "main_head"
     parent_task_id: Optional[str] = None
     requesting_agent: str = "main_head"
     assigned_agent: str  # browser_head, terminal_head, worker
     capability: str
     objective: str
-    scope_ref: str
-    allowed_tool_ids: List[str] = []
-    input: Dict[str, Any] = {}
+    task_objective: Optional[str] = None
+    scope_ref: str = ""
+    authorized_scope: Dict[str, Any] = Field(default_factory=dict)
+    permitted_domains: List[str] = Field(default_factory=list)
+    permitted_tools: List[str] = Field(default_factory=list)
+    allowed_tool_ids: List[str] = Field(default_factory=list)
+    execution_mode: str = "AUTOMATED"
+    approval_requirements: Dict[str, Any] = Field(default_factory=dict)
+    input: Dict[str, Any] = Field(default_factory=dict)
     expected_output_schema: str = "generic_result.v1"
     risk_class: str = "low"
+    timeout_seconds: int = 30
     budget: Dict[str, int] = Field(default_factory=lambda: {"max_tool_calls": 5, "max_runtime_seconds": 60})
     deadline: Optional[str] = None
     idempotency_key: Optional[str] = None
@@ -26,7 +36,8 @@ class TaskEnvelope(BaseModel):
 
 
 class WorkerResultEnvelope(BaseModel):
-    schema_version: str = "1.0"
+    """Standardized response from specialized workers to Sub-Head supervisors."""
+    schema_version: str = "2.0"
     task_id: str
     agent_id: str
     status: str = "succeeded"  # succeeded, no_findings, partial, failed, timed_out
@@ -43,7 +54,8 @@ class WorkerResultEnvelope(BaseModel):
 
 
 class FindingsPackage(BaseModel):
-    schema_version: str = "1.0"
+    """Consolidated package of verified findings returned from Sub-Heads to Main Head."""
+    schema_version: str = "2.0"
     investigation_id: str
     subhead_agent: str  # browser_head, terminal_head
     status: str = "succeeded"  # succeeded, partial, no_findings, failed

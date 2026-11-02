@@ -43,8 +43,16 @@ class Settings(BaseSettings):
     # Safe Startup Mode Flags (Defaults per Safe Application Startup Requirement)
     ZAPRICA_SAFE_MODE: bool = True
     TERMINAL_EXECUTION_ENABLED: bool = False
+    TERMINAL_SANDBOX_REQUIRED: bool = True
+    BROWSER_SESSION_AUTOSTART: bool = False
+    BROWSER_AUTOMATION_ENABLED: bool = False
     AUTO_INVESTIGATION_ENABLED: bool = False
     AUTO_TOOL_INSTALLATION: bool = False
+
+    # Dedicated Environment Settings
+    BROWSER_PROFILES_DIR: str = "./data/browser_profiles"
+    BROWSER_HEADLESS: bool = False
+    DOCKER_SANDBOX_IMAGE: str = "zaprica-sandbox:latest"
 
     # Logging
     LOG_LEVEL: str = "INFO"

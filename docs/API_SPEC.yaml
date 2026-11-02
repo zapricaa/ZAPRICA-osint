@@ -28,6 +28,9 @@ tags:
   - name: Tools
   - name: Administration
   - name: Events
+  - name: Browser
+  - name: Terminal
+  - name: Agents
 paths:
   /health/live:
     get:

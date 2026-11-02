@@ -167,3 +167,29 @@ class DataClassifier:
         elif any(k in attr for k in ["twitter", "github", "linkedin", "social"]):
             return "social_profile"
         return "metadata"
+
+
+class SortingAndIndexingWorker:
+    """Deterministic worker that sorts and indexes extracted findings and artifacts."""
+
+    @staticmethod
+    def sort_findings(findings: List[Dict[str, Any]], sort_key: str = "confidence_level", reverse: bool = True) -> List[Dict[str, Any]]:
+        """Sorts findings deterministically by confidence or alphabetical title."""
+        rank_order = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+
+        def _key_func(item: Dict[str, Any]):
+            if sort_key == "confidence_level":
+                conf = item.get("confidence_level", "medium").lower()
+                return rank_order.get(conf, 0)
+            return str(item.get(sort_key, "")).lower()
+
+        return sorted(findings, key=_key_func, reverse=reverse)
+
+    @staticmethod
+    def index_by_type(findings: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+        """Indexes findings into categories for quick correlation."""
+        indexed: Dict[str, List[Dict[str, Any]]] = {}
+        for f in findings:
+            cat = f.get("finding_type", "generic")
+            indexed.setdefault(cat, []).append(f)
+        return indexed

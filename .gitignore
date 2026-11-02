@@ -35,6 +35,8 @@ htmlcov/
 *.db
 *.sqlite3
 data/evidence/
+data/browser_profiles/
+data/
 zaprica.db
 
 # Environment variables
