@@ -73,15 +73,30 @@ async def test_public_registration_disabled(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_one_time_bootstrap_super_admin(client: AsyncClient):
-    """One-time bootstrap of the first SUPER_ADMIN account."""
-    bootstrap_payload = {
+    """One-time bootstrap of the first SUPER_ADMIN account requires valid secret."""
+    # 1. Reject invalid bootstrap secret
+    invalid_payload = {
         "username": "superadmin",
         "email": "admin@example.com",
         "display_name": "Chief Security Officer",
         "password": "SuperSecureAdminPassword123!",
+        "bootstrap_secret": "wrong_secret_key",
         "workspace_name": "HQ Cyber Command"
     }
-    resp = await client.post("/v1/auth/bootstrap", json=bootstrap_payload)
+    resp = await client.post("/v1/auth/bootstrap", json=invalid_payload)
+    assert resp.status_code == 403
+    assert "invalid bootstrap secret" in resp.json()["detail"].lower()
+
+    # 2. Succeed with valid bootstrap secret
+    valid_payload = {
+        "username": "superadmin",
+        "email": "admin@example.com",
+        "display_name": "Chief Security Officer",
+        "password": "SuperSecureAdminPassword123!",
+        "bootstrap_secret": "zaprica_bootstrap_superadmin_secret",
+        "workspace_name": "HQ Cyber Command"
+    }
+    resp = await client.post("/v1/auth/bootstrap", json=valid_payload)
     assert resp.status_code == 201
     data = resp.json()
     assert "access_token" in data
@@ -92,7 +107,7 @@ async def test_one_time_bootstrap_super_admin(client: AsyncClient):
     assert "session_token" in resp.cookies or "session_token" in data
 
     # Attempting to bootstrap a SECOND time must fail with 403
-    second_resp = await client.post("/v1/auth/bootstrap", json=bootstrap_payload)
+    second_resp = await client.post("/v1/auth/bootstrap", json=valid_payload)
     assert second_resp.status_code == 403
     assert "already been bootstrapped" in second_resp.json()["detail"].lower()
 
@@ -105,7 +120,8 @@ async def test_admin_invitation_and_acceptance_flow(client: AsyncClient):
         "username": "superadmin2",
         "email": "super2@example.com",
         "display_name": "Super Admin 2",
-        "password": "Password123!@#"
+        "password": "Password123!@#",
+        "bootstrap_secret": "zaprica_bootstrap_superadmin_secret",
     })
     admin_token = boot_resp.json()["access_token"]
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
@@ -160,7 +176,8 @@ async def test_suspended_user_access_revocation(client: AsyncClient):
         "username": "superadmin3",
         "email": "super3@example.com",
         "display_name": "Super Admin 3",
-        "password": "Password123!@#"
+        "password": "Password123!@#",
+        "bootstrap_secret": "zaprica_bootstrap_superadmin_secret",
     })
     admin_token = boot_resp.json()["access_token"]
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
@@ -223,7 +240,8 @@ async def test_mfa_setup_and_login_verification(client: AsyncClient):
         "username": "mfadmin",
         "email": "mfa@example.com",
         "display_name": "MFA Admin",
-        "password": "Password123!@#"
+        "password": "Password123!@#",
+        "bootstrap_secret": "zaprica_bootstrap_superadmin_secret",
     })
     admin_token = boot_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {admin_token}"}
@@ -282,7 +300,8 @@ async def test_logout_invalidates_session(client: AsyncClient):
         "username": "logoutuser",
         "email": "logout@example.com",
         "display_name": "Logout User",
-        "password": "Password123!@#"
+        "password": "Password123!@#",
+        "bootstrap_secret": "zaprica_bootstrap_superadmin_secret",
     })
     token = boot_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}

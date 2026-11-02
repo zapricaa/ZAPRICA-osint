@@ -40,6 +40,7 @@ async def admin_headers(client: AsyncClient):
         "email": "admin@example.com",
         "display_name": "Admin Operator",
         "password": "AdminPassword123!@#",
+        "bootstrap_secret": "zaprica_bootstrap_superadmin_secret",
         "workspace_name": "SecOps Core"
     }
     resp = await client.post("/v1/auth/bootstrap", json=reg_payload)

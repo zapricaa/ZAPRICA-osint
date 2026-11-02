@@ -192,6 +192,23 @@ async def get_current_workspace(
     return workspace
 
 
+def _normalize_role_str(role: str) -> str:
+    r = role.strip().lower()
+    if r in ("admin", "administrator"):
+        return "admin"
+    if r in ("super_admin", "superadmin", "super-admin"):
+        return "super_admin"
+    return r
+
+
+def _roles_match(user_role: Optional[str], allowed_roles: List[str]) -> bool:
+    if not user_role:
+        return False
+    norm_user = _normalize_role_str(user_role)
+    norm_allowed = {_normalize_role_str(r) for r in allowed_roles}
+    return norm_user in norm_allowed
+
+
 def require_role(allowed_roles: List[str]):
     """Enforce workspace role permission check."""
     async def role_checker(
@@ -199,7 +216,7 @@ def require_role(allowed_roles: List[str]):
         workspace: Workspace = Depends(get_current_workspace),
     ) -> WorkspaceMembership:
         user_roles = [ur.role.name for ur in user.user_roles if ur.role]
-        if "SUPER_ADMIN" in user_roles:
+        if "SUPER_ADMIN" in user_roles or any(_normalize_role_str(r) == "super_admin" for r in user_roles):
             # Super Admin bypasses workspace role constraints
             matching = next(
                 (m for m in user.memberships if m.workspace_id == workspace.id),
@@ -219,7 +236,7 @@ def require_role(allowed_roles: List[str]):
             (m for m in user.memberships if m.workspace_id == workspace.id and m.status == "active"),
             None,
         )
-        if not membership or (membership.role not in allowed_roles and membership.role.upper() not in allowed_roles):
+        if not membership or not _roles_match(membership.role, allowed_roles):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Operation requires one of the following roles: {allowed_roles}. Current role: {getattr(membership, 'role', 'none')}.",
@@ -235,10 +252,11 @@ def require_system_role(allowed_roles: List[str]):
         user: User = Depends(get_current_user),
     ) -> User:
         user_roles = [ur.role.name for ur in user.user_roles if ur.role]
-        if "SUPER_ADMIN" in user_roles:
+        if "SUPER_ADMIN" in user_roles or any(_normalize_role_str(r) == "super_admin" for r in user_roles):
             return user
 
-        if not any(r in allowed_roles for r in user_roles):
+        norm_allowed = {_normalize_role_str(r) for r in allowed_roles}
+        if not any(_normalize_role_str(r) in norm_allowed for r in user_roles):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Administrative access denied. Requires system role in {allowed_roles}.",

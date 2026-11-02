@@ -76,7 +76,7 @@ export default function AgentCenterPage() {
             <div className="pt-3 border-t border-slate-800/80 space-y-1.5 text-xs font-mono text-slate-400">
               <div className="flex justify-between">
                 <span className="text-slate-500">Model Engine:</span>
-                <span className="text-slate-200">{agentStatus?.main_head?.model || "gemini-3.8-flash"}</span>
+                <span className="text-slate-200">{agentStatus?.main_head?.model || "gemini-2.0-flash"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Orchestrator:</span>
@@ -129,7 +129,7 @@ export default function AgentCenterPage() {
             <div className="pt-3 border-t border-slate-800/80 space-y-1.5 text-xs font-mono text-slate-400">
               <div className="flex justify-between">
                 <span className="text-slate-500">Model Engine:</span>
-                <span className="text-slate-200">{agentStatus?.browser_head?.model || "gemini-3.5-flash-lite"}</span>
+                <span className="text-slate-200">{agentStatus?.browser_head?.model || "gemini-2.0-flash-lite"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Egress Firewall:</span>
@@ -186,7 +186,7 @@ export default function AgentCenterPage() {
             <div className="pt-3 border-t border-slate-800/80 space-y-1.5 text-xs font-mono text-slate-400">
               <div className="flex justify-between">
                 <span className="text-slate-500">Model Engine:</span>
-                <span className="text-slate-200">{agentStatus?.terminal_head?.model || "gemini-3.5-flash-lite"}</span>
+                <span className="text-slate-200">{agentStatus?.terminal_head?.model || "gemini-2.0-flash-lite"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Execution Mode:</span>

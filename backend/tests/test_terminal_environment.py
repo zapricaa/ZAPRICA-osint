@@ -64,8 +64,22 @@ async def test_command_injection_prevention():
 
 
 @pytest.mark.asyncio
-async def test_terminal_execution_when_admin_enabled():
-    """Section 3.1: Verifies terminal manager dispatches authorized tool when admin enables execution."""
+async def test_terminal_execution_when_admin_enabled(monkeypatch):
+    """Section 3.1: Verifies terminal manager dispatches authorized tool inside Docker when admin enables execution."""
+    from app.terminal.sandbox_manager import ContainerExecutionResult
+    monkeypatch.setattr(DockerSandboxManager, "is_docker_available", lambda: True)
+
+    async def mock_sandbox_exec(command_argv, timeout_seconds=None, network_enabled=True):
+        return ContainerExecutionResult(
+            exit_code=0,
+            stdout=";; ANSWER SECTION:\nexample.com. 300 IN A 93.184.216.34\n",
+            stderr="",
+            duration_ms=120,
+            resource_usage={"container": "mock-test-sandbox"},
+        )
+
+    monkeypatch.setattr(DockerSandboxManager, "execute_in_sandbox", mock_sandbox_exec)
+
     safe_mode_controller.enable_terminal_execution("admin_tester", "Unit testing authorized inquiry")
     try:
         res = await terminal_manager.execute_task(
@@ -87,9 +101,17 @@ async def test_docker_fail_closed_guarantee(monkeypatch):
     # Force Docker availability check to return False
     monkeypatch.setattr(DockerSandboxManager, "is_docker_available", lambda: False)
 
-    with pytest.raises(HTTPException) as exc:
-        await DockerSandboxManager.execute_in_sandbox(["echo", "hello"])
+    safe_mode_controller.enable_terminal_execution("admin_tester", "Test fail closed")
+    try:
+        with pytest.raises(HTTPException) as exc:
+            await terminal_manager.execute_task(
+                task_id="test_task_fail_closed",
+                tool_id="dns_lookup",
+                arguments={"target": "example.com"},
+            )
 
-    assert exc.value.status_code == 503
-    assert "fail-closed" in exc.value.detail.lower() or "forbidden" in exc.value.detail.lower()
+        assert exc.value.status_code == 503
+        assert "fail-closed" in exc.value.detail.lower() or "offline" in exc.value.detail.lower()
+    finally:
+        safe_mode_controller.disable_terminal_execution("admin_tester")
 

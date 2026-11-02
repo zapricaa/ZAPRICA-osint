@@ -35,9 +35,9 @@ services:
       - AUTO_INVESTIGATION_ENABLED=false
       - AUTO_TOOL_INSTALLATION=false
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MAIN_HEAD_MODEL=gemini-3.8-flash
-      - GEMINI_BROWSER_HEAD_MODEL=gemini-3.5-flash-lite
-      - GEMINI_TERMINAL_HEAD_MODEL=gemini-3.5-flash-lite
+      - GEMINI_MAIN_HEAD_MODEL=gemini-2.0-flash
+      - GEMINI_BROWSER_HEAD_MODEL=gemini-2.0-flash-lite
+      - GEMINI_TERMINAL_HEAD_MODEL=gemini-2.0-flash-lite
       - SECRET_KEY=${SECRET_KEY:-zaprica_production_secret_key_minimum_32_characters}
       - ZAPRICA_BOOTSTRAP_SECRET=${ZAPRICA_BOOTSTRAP_SECRET:-zaprica_bootstrap_superadmin_secret}
     ports:
@@ -53,6 +53,7 @@ services:
       - backend
     environment:
       - NEXT_PUBLIC_API_URL=http://backend:8000
+      - INTERNAL_API_URL=http://backend:8000
     ports:
       - "3000:3000"
 

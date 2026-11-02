@@ -189,7 +189,7 @@ export default function DashboardPage() {
             <Cpu className="w-4 h-4 text-amber-400" />
           </div>
           <div className="mt-3 text-sm font-bold font-mono text-slate-100 truncate">
-            Gemini 3.8 Flash
+            Gemini 2.0 Flash
           </div>
           <span className="text-[11px] text-emerald-400 font-mono mt-1 block">ONLINE & READY</span>
         </div>

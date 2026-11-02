@@ -80,3 +80,20 @@ ZAPRICA is an enterprise-grade AI-powered OSINT investigation platform featuring
 | AC-TERMINAL-02 | Allowlisted command specs with Pydantic validation & injection defense | Verified | `backend/tests/test_terminal_environment.py` |
 | AC-TERMINAL-03 | Strict fail-closed guarantee (Windows host execution prohibited) | Verified | `backend/tests/test_terminal_environment.py` |
 | AC-TOOL-POL-01 | Tool-level execution policy configuration & Epieos invariant guard | Verified | `backend/tests/test_terminal_environment.py` |
+
+
+---
+
+## Remediation & Audit Status (2026-11-02)
+
+| Remediation Item | Severity | Status | Verification |
+|---|---|---|---|
+| Bootstrap Secret Timing-Safe Validation | Critical | **Verified** | `backend/tests/test_auth.py` |
+| Real Google Gen AI Models (`gemini-2.0-flash`) | High | **Verified** | `backend/tests/test_ai_brain.py`, `test_models.py` |
+| Background LangGraph Runner Execution | Critical | **Verified** | `backend/tests/test_investigations.py` |
+| Strict Terminal Fail-Closed Invariant | Critical | **Verified** | `backend/tests/test_terminal_environment.py` |
+| Object-Level Authorization (IDOR Defense) | High | **Verified** | `backend/tests/test_browser_environment.py`, `test_terminal_environment.py` |
+| Playwright Route-Level SSRF Interception | High | **Verified** | `backend/tests/test_browser_environment.py` |
+| Role Normalization (`admin` / `administrator`) | Medium | **Verified** | `backend/tests/test_auth.py`, `test_tims.py` |
+| TIMS Frontend-to-Backend Alignment | Medium | **Verified** | `backend/tests/test_tims.py` |
+| Docker Build Fix (`frontend/public/.gitkeep`) | Medium | **Verified** | `npm --prefix frontend run build` |

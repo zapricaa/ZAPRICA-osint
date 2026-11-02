@@ -12,16 +12,16 @@ class ModelConfig(BaseModel):
         default_factory=lambda: settings.GEMINI_API_KEY
     )
     default_model: str = Field(
-        default_factory=lambda: settings.GEMINI_MODEL or "gemini-3.8-flash"
+        default_factory=lambda: settings.GEMINI_MODEL or "gemini-2.0-flash"
     )
     main_head_model: str = Field(
-        default_factory=lambda: settings.GEMINI_MAIN_HEAD_MODEL or "gemini-3.8-flash"
+        default_factory=lambda: settings.GEMINI_MAIN_HEAD_MODEL or "gemini-2.0-flash"
     )
     browser_head_model: str = Field(
-        default_factory=lambda: settings.GEMINI_BROWSER_HEAD_MODEL or "gemini-3.5-flash-lite"
+        default_factory=lambda: settings.GEMINI_BROWSER_HEAD_MODEL or "gemini-2.0-flash-lite"
     )
     terminal_head_model: str = Field(
-        default_factory=lambda: settings.GEMINI_TERMINAL_HEAD_MODEL or "gemini-3.5-flash-lite"
+        default_factory=lambda: settings.GEMINI_TERMINAL_HEAD_MODEL or "gemini-2.0-flash-lite"
     )
     timeout_seconds: int = 45
     max_retries: int = 3

@@ -97,8 +97,9 @@ class BootstrapAdminRequest(BaseModel):
     """One-time initial bootstrap payload to create the first SUPER_ADMIN."""
     username: str = Field(..., min_length=3, max_length=50, pattern="^[a-zA-Z0-9_-]+$")
     email: EmailStr
-    display_name: str = Field(..., min_length=2, max_length=100)
+    display_name: Optional[str] = Field(None, max_length=100)
     password: str = Field(..., min_length=12, max_length=128)
+    bootstrap_secret: str = Field(..., min_length=8, max_length=128)
     workspace_name: Optional[str] = Field("Primary Workspace", max_length=100)
 
 

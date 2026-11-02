@@ -79,6 +79,22 @@ class BrowserManager:
             )
 
             self._contexts[s_id_str] = context
+
+            # Register route-level SSRF and egress interception on the browser context
+            async def _route_ssrf_interceptor(route):
+                req_url = route.request.url
+                if req_url.startswith(("data:", "blob:", "about:")):
+                    await route.continue_()
+                    return
+                try:
+                    BrowserSecurityValidator.validate_target_url(req_url)
+                    await route.continue_()
+                except Exception as ssrf_err:
+                    logger.warning("SSRF filter blocked request to %s: %s", req_url, ssrf_err)
+                    await route.abort("blockedbyclient")
+
+            await context.route("**/*", _route_ssrf_interceptor)
+
             page = context.pages[0] if context.pages else await context.new_page()
             self._active_pages[s_id_str] = page
 

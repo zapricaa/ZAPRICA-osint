@@ -1,5 +1,6 @@
 """Authentication, Session Management, RBAC, and Invite-Only Service."""
 
+import hmac
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -87,6 +88,14 @@ class AuthService:
         One-time bootstrap process for the first SUPER_ADMIN account.
         Fails if any user already exists in the system.
         """
+        # 1. Verify bootstrap secret
+        expected_secret = getattr(settings, "BOOTSTRAP_SECRET", "zaprica_bootstrap_superadmin_secret")
+        if not hmac.compare_digest(data.bootstrap_secret.strip(), expected_secret.strip()):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Security Violation: Invalid bootstrap secret key.",
+            )
+
         user_count = await session.scalar(select(func.count(User.id)))
         if user_count and user_count > 0:
             raise HTTPException(
@@ -98,10 +107,11 @@ class AuthService:
         super_admin_role = roles["SUPER_ADMIN"]
 
         # Create Super Admin User
+        display_name = data.display_name.strip() if data.display_name else data.username.strip()
         admin_user = User(
             username=data.username.lower().strip(),
             email=data.email.lower().strip(),
-            display_name=data.display_name.strip(),
+            display_name=display_name,
             password_hash=hash_password(data.password),
             status="active",
         )

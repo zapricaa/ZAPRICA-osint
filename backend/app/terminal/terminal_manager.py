@@ -74,75 +74,29 @@ class TerminalManager:
 
         start_time = time.monotonic()
 
-        # 4. Check Docker availability for container execution
-        if DockerSandboxManager.is_docker_available():
-            container_res = await DockerSandboxManager.execute_in_sandbox(
-                command_argv=argv,
-                timeout_seconds=effective_timeout,
-                network_enabled=spec.requires_network,
-            )
-            return TerminalTaskExecutionResult(
-                task_id=task_id,
-                tool_id=tool_id,
-                command_name=spec.command_name,
-                status="SUCCESS" if container_res.exit_code == 0 else "FAILED",
-                stdout=container_res.stdout,
-                stderr=container_res.stderr,
-                exit_code=container_res.exit_code,
-                duration_ms=container_res.duration_ms,
-                resource_usage=container_res.resource_usage,
-            )
-        else:
-            # Deterministic adapter fallback for dev/testing when Docker daemon is not active
-            # (Section 11: NEVER execute arbitrary shell directly on Windows host)
-            duration_ms = int((time.monotonic() - start_time) * 1000)
-            mock_output = self._deterministic_fallback_execution(tool_id, arguments)
-
-            return TerminalTaskExecutionResult(
-                task_id=task_id,
-                tool_id=tool_id,
-                command_name=spec.command_name,
-                status="SUCCESS",
-                stdout=mock_output.get("raw_stdout", "Execution completed via deterministic parser"),
-                stderr="",
-                exit_code=0,
-                duration_ms=duration_ms,
-                data=mock_output,
-                resource_usage={"mode": "deterministic_isolated_adapter"},
+        # 4. Check Docker availability for container execution (Strict Fail-Closed Guarantee)
+        if not DockerSandboxManager.is_docker_available():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Fail-Closed Security Invariant: Docker sandbox is offline and terminal execution is strictly isolated. Host execution is prohibited."
             )
 
-    def _deterministic_fallback_execution(self, tool_id: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-        """Provides controlled, non-shell OSINT analysis when Docker is not active in dev/test."""
-        target = str(arguments.get("target") or arguments.get("domain") or "").strip().lower()
-
-        if tool_id == "dns_lookup":
-            return {
-                "tool": "dns_lookup",
-                "target": target,
-                "records": ["93.184.216.34"],
-                "raw_stdout": f";; ANSWER SECTION:\n{target}. 300 IN A 93.184.216.34\n",
-            }
-        elif tool_id == "whois_lookup":
-            return {
-                "tool": "whois_lookup",
-                "target": target,
-                "domain_name": target,
-                "registrar": "Public Domain Registry",
-                "raw_stdout": f"Domain Name: {target}\nRegistrar: Public Domain Registry\nStatus: clientTransferProhibited\n",
-            }
-        elif tool_id == "metadata_extractor":
-            return {
-                "tool": "metadata_extractor",
-                "target": target,
-                "file_type": "PDF/Image Document",
-                "raw_stdout": "{\n  \"SourceFile\": \"sample.pdf\",\n  \"Author\": \"Investigator\"\n}\n",
-            }
-        else:
-            return {
-                "tool": tool_id,
-                "target": target,
-                "raw_stdout": f"Completed inquiry for {target}",
-            }
+        container_res = await DockerSandboxManager.execute_in_sandbox(
+            command_argv=argv,
+            timeout_seconds=effective_timeout,
+            network_enabled=spec.requires_network,
+        )
+        return TerminalTaskExecutionResult(
+            task_id=task_id,
+            tool_id=tool_id,
+            command_name=spec.command_name,
+            status="SUCCESS" if container_res.exit_code == 0 else "FAILED",
+            stdout=container_res.stdout,
+            stderr=container_res.stderr,
+            exit_code=container_res.exit_code,
+            duration_ms=container_res.duration_ms,
+            resource_usage=container_res.resource_usage,
+        )
 
 
 # Global terminal manager singleton

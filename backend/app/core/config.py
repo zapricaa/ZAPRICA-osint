@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "ZAPRICA OSINT"
     API_V1_STR: str = "/v1"
     SECRET_KEY: str = "dev-secret-key-change-in-production-must-be-at-least-32-chars"
+    BOOTSTRAP_SECRET: str = "zaprica_bootstrap_superadmin_secret"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
@@ -29,10 +30,10 @@ class Settings(BaseSettings):
 
     # Google Gemini AI Brain
     GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-3.8-flash"
-    GEMINI_MAIN_HEAD_MODEL: str = "gemini-3.8-flash"
-    GEMINI_BROWSER_HEAD_MODEL: str = "gemini-3.5-flash-lite"
-    GEMINI_TERMINAL_HEAD_MODEL: str = "gemini-3.5-flash-lite"
+    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GEMINI_MAIN_HEAD_MODEL: str = "gemini-2.0-flash"
+    GEMINI_BROWSER_HEAD_MODEL: str = "gemini-2.0-flash-lite"
+    GEMINI_TERMINAL_HEAD_MODEL: str = "gemini-2.0-flash-lite"
 
     # Sandbox / Tool Execution
     ENABLE_TERMINAL_SANDBOX: bool = True

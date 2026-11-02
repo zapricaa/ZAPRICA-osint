@@ -38,6 +38,18 @@ class ImportManualResultRequest(BaseModel):
     confidence_level: str = "high"
 
 
+def _verify_session_ownership(session_state: ActiveBrowserSessionState, current_user: User) -> None:
+    """Ensure non-superadmin users cannot access or manipulate other users' browser sessions."""
+    user_roles = [ur.role.name for ur in current_user.user_roles if ur.role]
+    if "SUPER_ADMIN" in user_roles:
+        return
+    if str(session_state.user_id) != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access Denied: You do not own this browser session."
+        )
+
+
 @router.post("/sessions", response_model=ActiveBrowserSessionState)
 async def create_browser_session(
     payload: CreateBrowserSessionRequest,
@@ -105,6 +117,7 @@ async def get_browser_session(
     session = browser_session_manager.get_session(session_id)
     if not session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Browser session '{session_id}' not found.")
+    _verify_session_ownership(session, current_user)
     return session
 
 
@@ -115,6 +128,11 @@ async def navigate_browser(
     current_user: User = Depends(require_role(["SUPER_ADMIN", "ADMINISTRATOR", "INVESTIGATOR"])),
 ):
     """Navigates the dedicated browser to target_url with SSRF and website automation policy checks."""
+    session = browser_session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Browser session '{session_id}' not found.")
+    _verify_session_ownership(session, current_user)
+
     return await browser_manager.navigate(
         session_id=session_id,
         target_url=payload.target_url,
@@ -133,6 +151,11 @@ async def confirm_authentication(
     Operator explicitly marks that they have logged in and completed MFA in the dedicated browser.
     Sets status to USER_AUTHENTICATED.
     """
+    session = browser_session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Browser session '{session_id}' not found.")
+    _verify_session_ownership(session, current_user)
+
     state = await browser_manager.confirm_authentication(
         session_id=session_id,
         operator_username=current_user.username,
@@ -157,6 +180,7 @@ async def capture_browser_screenshot(
     session_state = browser_session_manager.get_session(session_id)
     if not session_state:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found.")
+    _verify_session_ownership(session_state, current_user)
 
     screenshot_bytes = await browser_manager.capture_screenshot(session_id)
     inv_id = uuid.UUID(session_state.investigation_id)
@@ -195,6 +219,7 @@ async def import_manual_result(
     session_state = browser_session_manager.get_session(session_id)
     if not session_state:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found.")
+    _verify_session_ownership(session_state, current_user)
 
     inv_id = uuid.UUID(session_state.investigation_id)
     raw_bytes = payload.raw_data.encode("utf-8")
@@ -243,6 +268,11 @@ async def stop_browser_session(
     db: AsyncSession = Depends(get_db),
 ):
     """Closes dedicated browser context and stops session."""
+    session = browser_session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found.")
+    _verify_session_ownership(session, current_user)
+
     await browser_manager.close_session(session_id)
     db_sess = await db.scalar(select(BrowserSession).where(BrowserSession.id == uuid.UUID(session_id)))
     if db_sess:

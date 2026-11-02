@@ -1,3 +1,5 @@
+import asyncio
+import logging
 import re
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -7,12 +9,15 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 
+from app.core.database import async_session_factory
 from app.models.investigations import Investigation, InvestigationScope
 from app.models.tasks import Task
 from app.models.evidence import EvidenceArtifact, Finding, FindingSource
 from app.models.reports import Report, AuditEvent
 from app.schemas.investigations import InvestigationCreate, InvestigationOut, InvestigationScopeOut
 from app.core.events import event_bus, InvestigationEvent
+
+logger = logging.getLogger("zaprica.investigations")
 
 
 def ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
@@ -210,7 +215,56 @@ class InvestigationService:
             )
         )
 
+        # Dispatch background execution of Main Head LangGraph pipeline
+        asyncio.create_task(
+            cls._run_investigation_background(workspace_id, user_id, investigation_id)
+        )
+
         return inv
+
+    @classmethod
+    async def _run_investigation_background(
+        cls,
+        workspace_id: uuid.UUID,
+        user_id: uuid.UUID,
+        investigation_id: uuid.UUID,
+    ) -> None:
+        """Background worker executing Main Head LangGraph pipeline."""
+        async with async_session_factory() as session:
+            try:
+                # Update status to running
+                inv = await cls.get_investigation(session, workspace_id, investigation_id)
+                inv.status = "running"
+                await session.commit()
+
+                await event_bus.publish(
+                    InvestigationEvent(
+                        investigation_id=str(investigation_id),
+                        event_type="investigation_status_change",
+                        data={"status": "running"}
+                    )
+                )
+
+                # Execute LangGraph Main Head workflow
+                await cls.execute_graph(session, workspace_id, user_id, investigation_id)
+
+            except Exception as e:
+                logger.error("Error executing investigation graph for %s: %s", investigation_id, e)
+                try:
+                    inv = await cls.get_investigation(session, workspace_id, investigation_id)
+                    inv.status = "failed"
+                    inv.completed_at = datetime.now(timezone.utc)
+                    await session.commit()
+
+                    await event_bus.publish(
+                        InvestigationEvent(
+                            investigation_id=str(investigation_id),
+                            event_type="investigation_failed",
+                            data={"status": "failed", "error": str(e)}
+                        )
+                    )
+                except Exception as rollback_err:
+                    logger.error("Failed to record investigation failure state: %s", rollback_err)
 
     @classmethod
     async def execute_graph(
