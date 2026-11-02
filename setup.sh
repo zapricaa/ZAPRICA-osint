@@ -585,3 +585,4 @@ echo "Detailed installation log is available at:"
 echo "   ${INSTALL_LOG}"
 echo ""
 exit 0
+

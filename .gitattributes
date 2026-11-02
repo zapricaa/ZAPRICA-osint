@@ -1,0 +1,8 @@
+# Automatic text-file detection
+* text=auto
+
+# Preserve Linux line endings
+*.sh text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
