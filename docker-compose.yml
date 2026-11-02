@@ -40,6 +40,9 @@ services:
       - GEMINI_TERMINAL_HEAD_MODEL=gemini-2.0-flash-lite
       - SECRET_KEY=${SECRET_KEY:-zaprica_production_secret_key_minimum_32_characters}
       - ZAPRICA_BOOTSTRAP_SECRET=${ZAPRICA_BOOTSTRAP_SECRET:-zaprica_bootstrap_superadmin_secret}
+      - HIBP_API_KEY=${HIBP_API_KEY:-}
+      - HOLEHE_ENABLED=${HOLEHE_ENABLED:-false}
+      - THEHARVESTER_SOURCES=${THEHARVESTER_SOURCES:-crtsh}
     ports:
       - "8000:8000"
 

@@ -38,6 +38,18 @@ class TerminalHeadAgent:
             elif tool_id == "whois_lookup":
                 target = task.input.get("target") or task.input.get("domain", "")
                 res = await NetworkIntelligenceWorker.run_whois(task.task_id, target)
+            elif tool_id == "theharvester":
+                target_domain = task.input.get("domain") or task.input.get("target", "")
+                sources = task.input.get("sources", "crtsh")
+                limit = int(task.input.get("limit", 200))
+                res = await CliOsintWorker.run_theharvester(task.task_id, target_domain, sources, limit)
+            elif tool_id == "sherlock":
+                target_username = task.input.get("username") or task.input.get("target", "")
+                timeout_val = str(task.input.get("timeout", "10"))
+                res = await CliOsintWorker.run_sherlock(task.task_id, target_username, timeout_val)
+            elif tool_id == "holehe":
+                target_email = task.input.get("email") or task.input.get("target", "")
+                res = await CliOsintWorker.run_holehe(task.task_id, target_email)
             elif tool_id == "metadata_extractor":
                 target = task.input.get("target") or task.input.get("file_uri", "")
                 res = await MetadataAnalysisWorker.extract_metadata(task.task_id, target)
@@ -126,6 +138,47 @@ class TerminalHeadAgent:
                     "normalized_value": f.normalized_value,
                     "confidence_level": f.confidence_level
                 })
+
+            elif tool_id == "theharvester":
+                import re
+                sub_pattern = re.compile(r"\b(?:[A-Za-z0-9\-]+\.)+" + re.escape(target_str) + r"\b", re.IGNORECASE)
+                for sub in sorted(set(sub_pattern.findall(res.stdout)))[:15]:
+                    if sub.lower() != target_str.lower() and "@" not in sub:
+                        f = await EvidenceService.process_and_create_finding(
+                            session=session,
+                            workspace_id=workspace_id,
+                            investigation_id=investigation_id,
+                            finding_type="domain_info",
+                            title=f"Subdomain: {sub.lower()}",
+                            summary=f"Harvested subdomain {sub.lower()} for {target_str}",
+                            raw_value=sub.lower(),
+                            evidence_artifact_id=artifact.id,
+                            source_url=f"theharvester://{target_str}",
+                            source_locator="Passive CT Source",
+                            task_id=uuid.UUID(task.task_id) if task.task_id else None,
+                            confidence_level="medium",
+                        )
+                        findings.append({"id": str(f.id), "finding_type": f.finding_type, "title": f.title, "normalized_value": f.normalized_value, "confidence_level": f.confidence_level})
+
+            elif tool_id == "sherlock":
+                import re
+                profile_pattern = re.compile(r"\[\+\]\s+([^:]+):\s+(https?://\S+)", re.IGNORECASE)
+                for site, purl in profile_pattern.findall(res.stdout)[:15]:
+                    f = await EvidenceService.process_and_create_finding(
+                        session=session,
+                        workspace_id=workspace_id,
+                        investigation_id=investigation_id,
+                        finding_type="contact",
+                        title=f"Candidate Profile: {site.strip()}",
+                        summary=f"Candidate profile URL {purl.strip()} on {site.strip()} (Candidate indicator, not identity proof)",
+                        raw_value=purl.strip(),
+                        evidence_artifact_id=artifact.id,
+                        source_url=f"sherlock://{target_str}",
+                        source_locator=site.strip(),
+                        task_id=uuid.UUID(task.task_id) if task.task_id else None,
+                        confidence_level="low",
+                    )
+                    findings.append({"id": str(f.id), "finding_type": f.finding_type, "title": f.title, "normalized_value": f.normalized_value, "confidence_level": f.confidence_level})
 
             elif tool_id == "metadata_extractor":
                 f = await EvidenceService.process_and_create_finding(

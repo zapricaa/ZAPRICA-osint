@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     BROWSER_HEADLESS: bool = False
     DOCKER_SANDBOX_IMAGE: str = "zaprica-sandbox:latest"
 
+    # DCE (Data Collection Engine) Settings
+    HIBP_API_KEY: Optional[str] = None
+    HOLEHE_ENABLED: bool = False
+    THEHARVESTER_SOURCES: str = "crtsh"
+    DCE_DEMO_MODE: bool = False
+
     # Logging
     LOG_LEVEL: str = "INFO"
 

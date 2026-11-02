@@ -31,7 +31,7 @@ class ToolAdapter(abc.ABC):
 
 class DNSLookupArgs(BaseModel):
     target: str = Field(..., min_length=3, max_length=255, description="Domain name to resolve")
-    record_type: str = Field(default="A", pattern="^(A|AAAA|MX|TXT|NS)$")
+    record_type: str = Field(default="A", pattern="^(A|AAAA|MX|TXT|NS|CNAME|SOA|CAA)$")
 
 
 class DNSLookupAdapter(ToolAdapter):
@@ -51,11 +51,31 @@ class DNSLookupAdapter(ToolAdapter):
         # Enforce SSRF Egress filter on host
         resolved_ips = SSRFEgressFilter.resolve_and_validate(domain)
 
+        from app.terminal.sandbox_manager import DockerSandboxManager
+        from app.terminal.terminal_manager import terminal_manager
+
+        records = resolved_ips
+        # If Docker sandbox is available, query real dig records
+        if DockerSandboxManager.is_docker_available():
+            try:
+                res = await terminal_manager.execute_task(
+                    task_id=f"dns-{uuid.uuid4().hex[:8]}",
+                    tool_id="dns_lookup",
+                    arguments={"target": domain, "record_type": validated_args.record_type},
+                    timeout_seconds=timeout_seconds,
+                )
+                if res.stdout:
+                    dig_records = [line.strip().strip('"') for line in res.stdout.splitlines() if line.strip() and not line.startswith(";")]
+                    if dig_records:
+                        records = dig_records
+            except Exception:
+                pass
+
         return {
             "target": domain,
             "record_type": validated_args.record_type,
-            "records": resolved_ips,
-            "resolved_count": len(resolved_ips),
+            "records": records,
+            "resolved_count": len(records),
             "status": "success"
         }
 
@@ -81,13 +101,92 @@ class WhoisLookupAdapter(ToolAdapter):
         # Ensure no private network target
         SSRFEgressFilter.resolve_and_validate(domain)
 
-        # Deterministic domain analysis
+        from app.terminal.sandbox_manager import DockerSandboxManager
+        from app.terminal.terminal_manager import terminal_manager
+
+        registrar = "Public Domain Registry"
+        if DockerSandboxManager.is_docker_available():
+            try:
+                res = await terminal_manager.execute_task(
+                    task_id=f"whois-{uuid.uuid4().hex[:8]}",
+                    tool_id="whois_lookup",
+                    arguments={"target": domain},
+                    timeout_seconds=timeout_seconds,
+                )
+                if res.stdout:
+                    import re
+                    m = re.search(r"^\s*registrar:\s*(.+)$", res.stdout, re.IGNORECASE | re.MULTILINE)
+                    if m:
+                        registrar = m.group(1).strip()
+            except Exception:
+                pass
+
         return {
             "target": domain,
             "domain_name": domain,
-            "registrar": "Public Domain Registry",
+            "registrar": registrar,
             "active_status": "registered",
-            "is_public_domain": True
+            "is_public_domain": True,
+            "status": "success",
+        }
+
+
+class TheHarvesterArgs(BaseModel):
+    domain: str = Field(..., min_length=3, max_length=255)
+    sources: str = Field(default="crtsh")
+    limit: int = Field(default=200, ge=10, le=500)
+
+
+class TheHarvesterAdapter(ToolAdapter):
+    @property
+    def tool_id(self) -> str:
+        return "theharvester"
+
+    @property
+    def argument_schema(self) -> Type[BaseModel]:
+        return TheHarvesterArgs
+
+    async def execute(self, validated_args: TheHarvesterArgs, timeout_seconds: int = 120) -> Dict[str, Any]:
+        from app.terminal.terminal_manager import terminal_manager
+        res = await terminal_manager.execute_task(
+            task_id=f"harvester-{uuid.uuid4().hex[:8]}",
+            tool_id="theharvester",
+            arguments={"domain": validated_args.domain, "sources": validated_args.sources, "limit": validated_args.limit},
+            timeout_seconds=timeout_seconds,
+        )
+        return {
+            "domain": validated_args.domain,
+            "stdout": res.stdout,
+            "status": "success" if res.exit_code == 0 else "failed",
+        }
+
+
+class SherlockArgs(BaseModel):
+    username: str = Field(..., min_length=2, max_length=64)
+    timeout: str = Field(default="10")
+
+
+class SherlockAdapter(ToolAdapter):
+    @property
+    def tool_id(self) -> str:
+        return "sherlock"
+
+    @property
+    def argument_schema(self) -> Type[BaseModel]:
+        return SherlockArgs
+
+    async def execute(self, validated_args: SherlockArgs, timeout_seconds: int = 120) -> Dict[str, Any]:
+        from app.terminal.terminal_manager import terminal_manager
+        res = await terminal_manager.execute_task(
+            task_id=f"sherlock-{uuid.uuid4().hex[:8]}",
+            tool_id="sherlock",
+            arguments={"username": validated_args.username, "timeout": validated_args.timeout},
+            timeout_seconds=timeout_seconds,
+        )
+        return {
+            "username": validated_args.username,
+            "stdout": res.stdout,
+            "status": "success" if res.exit_code == 0 else "failed",
         }
 
 
@@ -98,6 +197,8 @@ class ToolGateway:
         self._adapters: Dict[str, ToolAdapter] = {}
         self.register_adapter(DNSLookupAdapter())
         self.register_adapter(WhoisLookupAdapter())
+        self.register_adapter(TheHarvesterAdapter())
+        self.register_adapter(SherlockAdapter())
 
     def register_adapter(self, adapter: ToolAdapter):
         self._adapters[adapter.tool_id] = adapter

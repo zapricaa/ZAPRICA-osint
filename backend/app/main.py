@@ -19,6 +19,7 @@ from app.api.v1.admin_users import router as admin_users_router
 from app.api.v1.browser import router as browser_router
 from app.api.v1.terminal import router as terminal_router
 from app.api.v1.agents import router as agents_router
+from app.api.v1.collection import router as collection_router
 
 logger = logging.getLogger("zaprica.startup")
 
@@ -116,6 +117,7 @@ app.include_router(admin_users_router, prefix=settings.API_V1_STR, tags=["Admini
 app.include_router(browser_router, prefix=settings.API_V1_STR, tags=["Browser Head & Dedicated Browser"])
 app.include_router(terminal_router, prefix=settings.API_V1_STR, tags=["Terminal Head & Isolated Sandbox"])
 app.include_router(agents_router, prefix=settings.API_V1_STR, tags=["Multi-Agent Fleet & Supervision"])
+app.include_router(collection_router, prefix=settings.API_V1_STR, tags=["Data Collection Engine (DCE)"])
 
 from app.api.deps import get_current_user
 from app.services.auth_service import AuthService

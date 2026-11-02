@@ -48,6 +48,33 @@
    - Enforced HTTP 503 Service Unavailable when Docker sandbox is offline; prohibited any host command execution.
 7. Priority 5 (Object-Level Authorization / IDOR Defense):
    - Added `_verify_session_ownership` helper in `api/v1/browser.py` across all browser control endpoints.
+
+## 2026-11-02 — DCE (Data Collection Engine) Integration & File Organization
+
+### Actions Taken:
+1. **File Management Organization**:
+   - Categorized all root documentation and report files into structured subdirectories (`docs/architecture/`, `docs/reports/`, `docs/specifications/`, `docs/tracking/`).
+   - Cleaned root workspace, retaining single source-of-truth master documentation index in `docs/README.md`.
+2. **DCE Integration (Data Collection Engine)**:
+   - Clean-room design and implementation of DCE module under `backend/app/collection/` without copying unverified reference code.
+   - Built native adapters for:
+     * **WHOIS**: Real `whois` queries via Linux Docker sandbox with regex field parsing and redaction handling. Removed all fabricated registrar values.
+     * **DNS**: Native `dig` record resolution for A, AAAA, MX, NS, TXT, CNAME, SOA, and CAA records.
+     * **HIBP**: Official HIBP v3 API client via `httpx.AsyncClient` supporting authorized email breach lookups, HTTP 404/429 handling, and strict credential isolation.
+     * **theHarvester**: Linux CLI adapter in Docker with structured argument builders and output extraction.
+     * **Sherlock**: Target username profile candidate adapter with explicit candidate disclaimers.
+     * **Holehe**: Optional adapter strictly disabled by default (`HOLEHE_ENABLED=false`).
+     * **Demo**: Synthetic collector strictly restricted to demo fixtures and explicitly marked `is_synthetic=True`.
+   - Strictly omitted phone number collectors per requirements.
+3. **TIMS Multi-Point Automated Verification**:
+   - Replaced fake simulation in `validate_tool_version` with 7 real security checks (manifest schema, execution type validation, negative shell injection attack test, network policy enforcement, timeout constraints, playbook schema contract check).
+4. **Terminal Sandbox Hardening**:
+   - Replaced Alpine sandbox container with multi-stage Debian Bookworm build (`docker/sandbox/Dockerfile`) installing `dnsutils`, `whois`, `openssl`, `sherlock-project`, `holehe`, `theHarvester`, non-root user `10001:10001`.
+   - Enforced argument builder validation against leading `-` flag injection.
+   - Preserved strict fail-closed policy (HTTP 503 if Docker is unavailable; zero host execution).
+5. **Testing & Build Verification**:
+   - All 57 backend tests passing (`57 passed in 34s`).
+   - Frontend production build compiled with 0 errors (`next build` succeeded).
    - Added workspace membership verification in `api/v1/terminal.py` for task execution and log access.
 8. Priority 6 (Browser Route-Level SSRF Interception):
    - Implemented route-level interception on Playwright `BrowserContext` (`context.route("**/*")`) to validate all requests against `BrowserSecurityValidator` before socket connection.

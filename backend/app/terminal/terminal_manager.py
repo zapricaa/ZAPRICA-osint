@@ -66,11 +66,8 @@ class TerminalManager:
         spec = TerminalExecutionPolicyValidator.validate_command(tool_id, arguments)
         effective_timeout = timeout_seconds or spec.timeout_seconds
 
-        # 3. Construct clean argv list
-        argv = [spec.command_name] + spec.allowed_flags
-        for key, val in arguments.items():
-            if val is not None and str(val).strip():
-                argv.append(str(val).strip())
+        # 3. Construct clean argv list using explicit argument builder (never appends raw dict)
+        argv = TerminalExecutionPolicyValidator.build_argv(tool_id, arguments)
 
         start_time = time.monotonic()
 

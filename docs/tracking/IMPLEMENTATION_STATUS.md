@@ -25,6 +25,7 @@ ZAPRICA is an enterprise-grade AI-powered OSINT investigation platform featuring
 | **Phase 11** | Safe Application Startup Mode | Completed | 100% | Safe mode by default (`SAFE_MODE=true`, `TERMINAL_EXEC=false`, agents IDLE, workers DISABLED, admin execution controls). |
 | **Phase 12** | Frontend Dashboard & Investigation Workspace | Completed | 100% | Next.js 14 App Router, TypeScript, Tailwind dark cyber UI, 14 routes statically compiled and verified (`npm run build`). |
 | **Phase 13** | Deployment & Packaging | Completed | 100% | Multi-stage `backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml` with PostgreSQL 16 Alpine and healthchecks. |
+| **Phase 14** | DCE (Data Collection Engine) & Linux Sandboxing | Completed | 100% | Clean-room OSINT collectors (WHOIS, DNS, HIBP, theHarvester, Sherlock, Holehe restricted, Demo synthetic), Linux Docker container, TIMS automated security verification, 12 new automated tests. |
 
 ---
 
@@ -58,6 +59,14 @@ ZAPRICA is an enterprise-grade AI-powered OSINT investigation platform featuring
 | AC-TIMS-04 | Approval is separate from validation | Verified | `backend/tests/test_tims.py` |
 | AC-TIMS-05 | Only assigned agents discover tool | Verified | `backend/tests/test_tims.py` |
 | AC-TIMS-06 | Revocation blocks execution | Verified | `backend/tests/test_tims.py` |
+| AC-DCE-01 | WHOIS real Linux binary parsing with redactions | Verified | `backend/tests/test_dce_collectors.py` |
+| AC-DCE-02 | DNS dig queries (A, AAAA, MX, NS, TXT, CNAME, SOA, CAA) | Verified | `backend/tests/test_dce_collectors.py` |
+| AC-DCE-03 | HIBP v3 authenticated API client with error handling | Verified | `backend/tests/test_dce_collectors.py` |
+| AC-DCE-04 | theHarvester and Sherlock CLI adapters with arg builders | Verified | `backend/tests/test_dce_collectors.py` |
+| AC-DCE-05 | Holehe disabled-by-default safety enforcement | Verified | `backend/tests/test_dce_collectors.py` |
+| AC-DCE-06 | Synthetic demo collector fixture isolation | Verified | `backend/tests/test_dce_collectors.py` |
+| AC-DCE-07 | Terminal flag injection negative testing | Verified | `backend/tests/test_dce_collectors.py` |
+| AC-DCE-08 | TIMS automated multi-point security verification | Verified | `backend/tests/test_dce_collectors.py` |
 | AC-SEC-01 | SSRF filter blocks RFC 1918 addresses | Verified | `backend/tests/test_security.py` |
 | AC-SEC-02 | Command injection blocked | Verified | `backend/tests/test_security.py` |
 | AC-SEC-03 | Secret redaction before display | Verified | `backend/tests/test_security.py` |

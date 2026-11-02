@@ -15,6 +15,36 @@ class CliOsintWorker:
             arguments=arguments,
         )
 
+    @classmethod
+    async def run_theharvester(
+        cls, task_id: str, domain: str, sources: str = "crtsh", limit: int = 200
+    ) -> TerminalTaskExecutionResult:
+        return await terminal_manager.execute_task(
+            task_id=task_id,
+            tool_id="theharvester",
+            arguments={"domain": domain, "sources": sources, "limit": limit},
+        )
+
+    @classmethod
+    async def run_sherlock(
+        cls, task_id: str, username: str, timeout: str = "10"
+    ) -> TerminalTaskExecutionResult:
+        return await terminal_manager.execute_task(
+            task_id=task_id,
+            tool_id="sherlock",
+            arguments={"username": username, "timeout": timeout},
+        )
+
+    @classmethod
+    async def run_holehe(
+        cls, task_id: str, email: str
+    ) -> TerminalTaskExecutionResult:
+        return await terminal_manager.execute_task(
+            task_id=task_id,
+            tool_id="holehe",
+            arguments={"email": email},
+        )
+
 
 class NetworkIntelligenceWorker:
     """Worker for network intelligence tools (DNS, WHOIS, TLS Certificate analysis)."""
