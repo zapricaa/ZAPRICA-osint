@@ -10,12 +10,12 @@
 
 set -euo pipefail
 
-# Determine script & repository root directory
+# Determine script and repository root directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${SCRIPT_DIR}"
 INSTALL_LOG="${REPO_ROOT}/zaprica-install.log"
 
-# Terminal Formatting Colors
+# Terminal formatting colours
 BOLD="\033[1m"
 RESET="\033[0m"
 GREEN="\033[32m"
@@ -24,7 +24,7 @@ YELLOW="\033[33m"
 CYAN="\033[36m"
 BLUE="\033[34m"
 
-# Track Installation Statuses
+# Track installation statuses
 declare -A STATUS_MAP=(
     ["linux_reqs"]="FAIL"
     ["python_env"]="FAIL"
@@ -44,7 +44,7 @@ declare -A STATUS_MAP=(
     ["terminal_exec"]="DISABLED"
 )
 
-# Logging Helpers
+# Logging helpers
 log_info() {
     echo -e "${CYAN}[INFO]${RESET} $*" | tee -a "${INSTALL_LOG}"
 }
@@ -65,7 +65,7 @@ log_error() {
     echo -e "${RED}[ERROR]${RESET} $*" | tee -a "${INSTALL_LOG}"
 }
 
-# Run command with logging to file
+# Run a command with its output captured to the log file
 run_quiet() {
     local cmd_desc="$1"
     shift
@@ -77,18 +77,18 @@ run_quiet() {
     fi
 }
 
-# Determine Privilege Escalation Command
+# Determine privilege escalation method
 SUDO=""
 if [ "$(id -u)" -ne 0 ]; then
     if command -v sudo >/dev/null 2>&1; then
         SUDO="sudo"
     else
-        log_error "Root privileges or sudo access is required to install system packages."
+        log_error "Root privileges or sudo access are required to install system packages."
         exit 1
     fi
 fi
 
-# Initialize Log File
+# Initialise log file
 echo "======================================================================" > "${INSTALL_LOG}"
 echo "ZAPRICA Installation Log: $(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "${INSTALL_LOG}"
 echo "Host: $(uname -a)" >> "${INSTALL_LOG}"
@@ -114,7 +114,7 @@ if [ -f /etc/os-release ]; then
     . /etc/os-release
     DISTRO="${ID:-linux}"
     DISTRO_VER="${VERSION_ID:-}"
-    log_info "Linux Distribution: ${NAME:-Linux} ${DISTRO_VER}"
+    log_info "Linux distribution: ${NAME:-Linux} ${DISTRO_VER}"
 else
     DISTRO="unknown"
     DISTRO_VER="unknown"
@@ -140,7 +140,7 @@ if [ ${#MISSING_PKGS[@]} -gt 0 ]; then
     run_quiet "Updating package cache" ${SUDO} apt-get update -y
     run_quiet "Installing core build packages" ${SUDO} apt-get install -y --no-install-recommends "${MISSING_PKGS[@]}"
 else
-    log_info "Core system build utilities already installed."
+    log_info "Core system build utilities are already installed."
 fi
 
 STATUS_MAP["linux_reqs"]="PASS"
@@ -153,7 +153,7 @@ log_step "2/9 Configuring Python Runtime (>= 3.11)"
 
 PYTHON_BIN=""
 
-# Detect best available Python binary >= 3.11
+# Detect the best available Python binary >= 3.11
 for candidate in python3.13 python3.12 python3.11 python3; do
     if command -v "${candidate}" >/dev/null 2>&1; then
         if "${candidate}" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
@@ -166,7 +166,8 @@ done
 if [ -z "${PYTHON_BIN}" ]; then
     log_info "Python >= 3.11 not found in default PATH. Installing via apt..."
     run_quiet "Updating apt repository" ${SUDO} apt-get update -y
-    # Install Python 3.12 or 3.11 from default distro repos or deadsnakes if older Ubuntu
+    # Install Python 3.12 or 3.11 from default distribution repositories,
+    # or from the deadsnakes PPA on older Ubuntu releases.
     if apt-cache show python3.12 >/dev/null 2>&1; then
         run_quiet "Installing Python 3.12" ${SUDO} apt-get install -y python3.12 python3.12-venv python3.12-dev python3-pip
         PYTHON_BIN="python3.12"
@@ -182,15 +183,15 @@ if [ -z "${PYTHON_BIN}" ]; then
         PYTHON_BIN="python3.12"
     fi
 else
-    # Ensure venv and dev packages are installed for the selected Python
+    # Ensure venv and dev packages are installed for the selected Python version
     PY_VER_SHORT="$("${PYTHON_BIN}" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
     if ! dpkg -s "python${PY_VER_SHORT}-venv" >/dev/null 2>&1 && ! dpkg -s "python3-venv" >/dev/null 2>&1; then
         log_info "Installing venv package for Python ${PY_VER_SHORT}..."
-        run_quiet "Installing python venv" ${SUDO} apt-get install -y "python${PY_VER_SHORT}-venv" || ${SUDO} apt-get install -y python3-venv
+        run_quiet "Installing Python venv" ${SUDO} apt-get install -y "python${PY_VER_SHORT}-venv" || ${SUDO} apt-get install -y python3-venv
     fi
     if ! dpkg -s "python${PY_VER_SHORT}-dev" >/dev/null 2>&1 && ! dpkg -s "python3-dev" >/dev/null 2>&1; then
-        log_info "Installing dev headers for Python ${PY_VER_SHORT}..."
-        run_quiet "Installing python dev" ${SUDO} apt-get install -y "python${PY_VER_SHORT}-dev" || ${SUDO} apt-get install -y python3-dev
+        log_info "Installing development headers for Python ${PY_VER_SHORT}..."
+        run_quiet "Installing Python dev headers" ${SUDO} apt-get install -y "python${PY_VER_SHORT}-dev" || ${SUDO} apt-get install -y python3-dev
     fi
 fi
 
@@ -216,14 +217,14 @@ if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
 fi
 
 if [ "${NEED_NODE_INSTALL}" = true ]; then
-    log_info "Installing Node.js 20 LTS from official NodeSource repository..."
+    log_info "Installing Node.js 20 LTS from the official NodeSource repository..."
     run_quiet "Fetching NodeSource setup script" curl -fsSL https://deb.nodesource.com/setup_20.x -o /tmp/nodesource_setup.sh
     run_quiet "Executing NodeSource setup" ${SUDO} -E bash /tmp/nodesource_setup.sh
-    run_quiet "Installing Node.js & npm" ${SUDO} apt-get install -y nodejs
+    run_quiet "Installing Node.js and npm" ${SUDO} apt-get install -y nodejs
     rm -f /tmp/nodesource_setup.sh
 fi
 
-log_info "Node version: $(node -v), npm version: $(npm -v)"
+log_info "Node.js version: $(node -v), npm version: $(npm -v)"
 
 # ==============================================================================
 # 4. DOCKER ENGINE & SANDBOX DAEMON
@@ -236,25 +237,25 @@ if ! command -v docker >/dev/null 2>&1; then
     run_quiet "Installing Docker packages" ${SUDO} apt-get install -y docker.io docker-compose-plugin
 fi
 
-# Ensure docker service is running
+# Ensure the Docker service is running
 if command -v systemctl >/dev/null 2>&1; then
     if ! systemctl is-active --quiet docker; then
         log_info "Starting Docker systemd service..."
-        run_quiet "Starting docker service" ${SUDO} systemctl start docker
-        run_quiet "Enabling docker service" ${SUDO} systemctl enable docker
+        run_quiet "Starting Docker service" ${SUDO} systemctl start docker
+        run_quiet "Enabling Docker service" ${SUDO} systemctl enable docker
     fi
 fi
 
-# Determine whether current user needs sudo for docker
+# Determine whether the current user needs sudo for Docker
 DOCKER_CMD="docker"
 if ! docker info >/dev/null 2>&1; then
     if ${SUDO} docker info >/dev/null 2>&1; then
         DOCKER_CMD="${SUDO} docker"
-        # Add current user to docker group if non-root
+        # Add the current user to the docker group if not root
         if [ "$(id -u)" -ne 0 ] && ! groups "$USER" | grep -q '\bdocker\b'; then
-            log_warn "Adding user '${USER}' to docker group..."
+            log_warn "Adding user '${USER}' to the docker group..."
             ${SUDO} usermod -aG docker "$USER" >> "${INSTALL_LOG}" 2>&1 || true
-            log_warn "User '${USER}' added to 'docker' group. A shell re-login will be required for non-sudo docker usage."
+            log_warn "User '${USER}' has been added to the 'docker' group. A shell re-login is required for non-sudo Docker usage."
         fi
     else
         log_error "Docker daemon is unresponsive even with sudo privileges."
@@ -265,12 +266,12 @@ fi
 DOCKER_VER="$(${DOCKER_CMD} --version)"
 log_info "Docker Engine ready: ${DOCKER_VER}"
 STATUS_MAP["docker_engine"]="PASS"
-log_success "Docker Engine operational."
+log_success "Docker Engine is operational."
 
 # ==============================================================================
-# 5. ENVIRONMENT CONFIGURATION (.env) & STORAGE INITIALIZATION
+# 5. ENVIRONMENT CONFIGURATION (.env) & STORAGE INITIALISATION
 # ==============================================================================
-log_step "5/9 Initializing Environment Configuration & Data Directories"
+log_step "5/9 Initialising Environment Configuration & Data Directories"
 
 # Ensure data directories exist
 mkdir -p "${REPO_ROOT}/data/evidence" "${REPO_ROOT}/data/browser_profiles"
@@ -280,11 +281,11 @@ if [ -f "${ENV_FILE}" ]; then
     log_info "Existing '.env' file detected. Preserving credentials and configurations intact."
 else
     log_info "No '.env' file found. Generating production-ready '.env' with safe defaults..."
-    
+
     # Generate cryptographically secure tokens
     GEN_SECRET="$(openssl rand -hex 32)"
     GEN_BOOTSTRAP="$(openssl rand -hex 16)"
-    
+
     cat <<EOF > "${ENV_FILE}"
 # ZAPRICA Environment Configuration
 # Generated automatically by setup.sh
@@ -330,11 +331,11 @@ AUTO_TOOL_INSTALLATION=false
 LOG_LEVEL=INFO
 EOF
     chmod 600 "${ENV_FILE}"
-    log_success "Created '.env' with secure SECRET_KEY and safe startup flags."
+    log_success "Created '.env' with a secure SECRET_KEY and safe startup flags."
 fi
 
-# Audit Environment State for summary reporting
-if grep -q '^GEMINI_API_KEY=.\+' "${ENV_FILE}" 2>/dev/null && ! grep -q 'GEMINI_API_KEY==""' "${ENV_FILE}"; then
+# Audit environment state for the summary report
+if grep -qP '^GEMINI_API_KEY=.+' "${ENV_FILE}" 2>/dev/null; then
     KEY_VAL="$(grep '^GEMINI_API_KEY=' "${ENV_FILE}" | cut -d= -f2- | tr -d '"'\'' ')"
     if [ -n "${KEY_VAL}" ]; then
         STATUS_MAP["gemini_key"]="CONFIGURED"
@@ -353,18 +354,18 @@ log_step "6/9 Installing Backend Dependencies & Verifying Imports"
 VENV_PATH="${REPO_ROOT}/backend/.venv"
 if [ ! -d "${VENV_PATH}" ]; then
     log_info "Creating backend Python virtual environment at ${VENV_PATH}..."
-    run_quiet "Creating venv" "${PYTHON_BIN}" -m venv "${VENV_PATH}"
+    run_quiet "Creating virtual environment" "${PYTHON_BIN}" -m venv "${VENV_PATH}"
 fi
 
 VENV_PY="${VENV_PATH}/bin/python"
 VENV_PIP="${VENV_PATH}/bin/pip"
 
-run_quiet "Upgrading pip, setuptools, wheel" "${VENV_PIP}" install --upgrade pip setuptools wheel
+run_quiet "Upgrading pip, setuptools, and wheel" "${VENV_PIP}" install --upgrade pip setuptools wheel
 
 log_info "Installing pinned dependencies from backend/requirements.txt..."
 run_quiet "Installing backend dependencies" "${VENV_PIP}" install -r "${REPO_ROOT}/backend/requirements.txt"
 
-log_info "Installing backend in editable development mode..."
+log_info "Installing backend package in editable development mode..."
 run_quiet "Installing editable backend package" "${VENV_PIP}" install -e "${REPO_ROOT}/backend"
 
 log_info "Verifying critical backend package imports..."
@@ -396,10 +397,10 @@ log_step "7/9 Installing Browser Head Playwright Chromium & System Libraries"
 
 log_info "Installing Playwright Linux system dependencies..."
 if [ "$(id -u)" -eq 0 ]; then
-    run_quiet "Installing playwright system dependencies" "${VENV_PY}" -m playwright install-deps chromium
+    run_quiet "Installing Playwright system dependencies" "${VENV_PY}" -m playwright install-deps chromium
 else
-    # Install dependencies with sudo
-    run_quiet "Installing playwright system dependencies via sudo" ${SUDO} "${VENV_PY}" -m playwright install-deps chromium
+    # Install system dependencies with elevated privileges
+    run_quiet "Installing Playwright system dependencies via sudo" ${SUDO} "${VENV_PY}" -m playwright install-deps chromium
 fi
 
 log_info "Installing Playwright Chromium browser binary..."
@@ -442,34 +443,34 @@ run_quiet "Building Docker sandbox image" ${DOCKER_CMD} build -t "${SANDBOX_IMAG
 STATUS_MAP["docker_sandbox"]="PASS"
 
 # Verify each integrated collector inside the isolated sandbox
-log_info "Verifying WHOIS inside sandbox..."
+log_info "Verifying WHOIS inside the sandbox..."
 if ${DOCKER_CMD} run --rm "${SANDBOX_IMAGE}" which whois >> "${INSTALL_LOG}" 2>&1; then
     STATUS_MAP["whois"]="PASS"
-    log_info "WHOIS binary verified in sandbox."
+    log_info "WHOIS binary verified in the sandbox."
 fi
 
-log_info "Verifying dig (dnsutils) inside sandbox..."
+log_info "Verifying dig (dnsutils) inside the sandbox..."
 if ${DOCKER_CMD} run --rm "${SANDBOX_IMAGE}" dig -v >> "${INSTALL_LOG}" 2>&1; then
     STATUS_MAP["dns_dig"]="PASS"
-    log_info "dig (DNS) binary verified in sandbox."
+    log_info "dig (DNS) binary verified in the sandbox."
 fi
 
-log_info "Verifying theHarvester inside sandbox..."
+log_info "Verifying theHarvester inside the sandbox..."
 if ${DOCKER_CMD} run --rm "${SANDBOX_IMAGE}" theHarvester -h >> "${INSTALL_LOG}" 2>&1; then
     STATUS_MAP["theharvester"]="PASS"
-    log_info "theHarvester verified in sandbox."
+    log_info "theHarvester verified in the sandbox."
 fi
 
-log_info "Verifying Sherlock inside sandbox..."
+log_info "Verifying Sherlock inside the sandbox..."
 if ${DOCKER_CMD} run --rm "${SANDBOX_IMAGE}" sherlock --version >> "${INSTALL_LOG}" 2>&1; then
     STATUS_MAP["sherlock"]="PASS"
-    log_info "Sherlock verified in sandbox."
+    log_info "Sherlock verified in the sandbox."
 fi
 
-# Verify Holehe inside sandbox (installed in image, disabled at runtime by default)
+# Verify Holehe inside the sandbox (installed in the image but disabled at runtime by default)
 if ${DOCKER_CMD} run --rm "${SANDBOX_IMAGE}" holehe --version >> "${INSTALL_LOG}" 2>&1 || \
    ${DOCKER_CMD} run --rm "${SANDBOX_IMAGE}" python3 -m holehe --version >> "${INSTALL_LOG}" 2>&1; then
-    log_info "Holehe collector binary present in sandbox (runtime disabled by default)."
+    log_info "Holehe collector binary present in the sandbox (runtime disabled by default)."
 fi
 
 log_success "Docker sandbox image built and all integrated OSINT tools verified."
@@ -479,7 +480,7 @@ log_success "Docker sandbox image built and all integrated OSINT tools verified.
 # ==============================================================================
 log_step "9/9 Running Database Migrations & Validating Application Components"
 
-# Run Alembic Database Migrations
+# Run Alembic database migrations
 log_info "Executing Alembic database migrations..."
 (
     cd "${REPO_ROOT}/backend"
@@ -488,7 +489,7 @@ log_info "Executing Alembic database migrations..."
 STATUS_MAP["db_migrations"]="PASS"
 log_success "Database migrations applied successfully."
 
-# Self-test Backend startup and DCE capability registry
+# Self-test backend startup and DCE capability registry
 log_info "Verifying backend startup and DCE coordinator registration..."
 (
     cd "${REPO_ROOT}/backend"
@@ -501,7 +502,7 @@ import app.main
 async def run_selftest():
     caps = await dce_coordinator.list_capabilities()
     names = [c.collector_id.value for c in caps]
-    print(f'Active DCE Registered Collectors: {names}')
+    print(f'Active DCE registered collectors: {names}')
     assert len(names) >= 6, 'Missing registered DCE collectors'
     print('Backend self-test passed.')
 
@@ -511,7 +512,7 @@ asyncio.run(run_selftest())
 STATUS_MAP["backend_verif"]="PASS"
 log_success "Backend components and DCE coordinator validated."
 
-# Install frontend dependencies and verify production build
+# Install frontend dependencies and verify the production build
 log_step "Building Frontend Production Bundle"
 (
     cd "${REPO_ROOT}/frontend"
@@ -559,16 +560,16 @@ echo -e "${GREEN}${BOLD}ZAPRICA has been successfully installed and verified on 
 echo ""
 echo -e "${BOLD}Next Steps to Launch ZAPRICA:${RESET}"
 echo ""
-echo "1. Configure Google Gemini API Key:"
+echo "1. Configure the Google Gemini API key:"
 echo "   Edit the .env file and set GEMINI_API_KEY:"
 echo "   nano .env"
 echo ""
-echo "2. Start the Backend API Server:"
+echo "2. Start the backend API server:"
 echo "   cd ${REPO_ROOT}/backend"
 echo "   source .venv/bin/activate"
 echo "   uvicorn app.main:app --host 0.0.0.0 --port 8000"
 echo ""
-echo "3. Start the Frontend Dashboard:"
+echo "3. Start the frontend dashboard:"
 echo "   cd ${REPO_ROOT}/frontend"
 echo "   npm start"
 echo "   (Accessible at http://localhost:3000)"
@@ -585,4 +586,3 @@ echo "Detailed installation log is available at:"
 echo "   ${INSTALL_LOG}"
 echo ""
 exit 0
-
