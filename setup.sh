@@ -14,6 +14,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${SCRIPT_DIR}"
 INSTALL_LOG="${REPO_ROOT}/zaprica-install.log"
+export PATH="/usr/local/bin:$PATH"
 
 # Terminal formatting colours
 BOLD="\033[1m"
@@ -205,6 +206,8 @@ log_success "Python environment validated: ${PY_VERSION_STRING}"
 # ==============================================================================
 log_step "3/9 Verifying Node.js and npm Runtime (Node.js 20 LTS)"
 
+NODE_20_VERSION="20.18.1"
+
 NEED_NODE_INSTALL=true
 if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
     NODE_VER="$(node -v | sed 's/v//')"
@@ -217,11 +220,59 @@ if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
 fi
 
 if [ "${NEED_NODE_INSTALL}" = true ]; then
-    log_info "Installing Node.js 20 LTS from the official NodeSource repository..."
-    run_quiet "Fetching NodeSource setup script" curl -fsSL https://deb.nodesource.com/setup_20.x -o /tmp/nodesource_setup.sh
-    run_quiet "Executing NodeSource setup" ${SUDO} -E bash /tmp/nodesource_setup.sh
-    run_quiet "Installing Node.js and npm" ${SUDO} apt-get install -y nodejs
-    rm -f /tmp/nodesource_setup.sh
+    # Strategy 1: Try the system package manager first (works on Ubuntu, Debian, Kali, etc.)
+    NODE_INSTALLED_VIA_APT=false
+    if apt-cache show nodejs 2>/dev/null | grep -qP '^Version: (1[89]|[2-9]\d)\.' 2>/dev/null; then
+        log_info "Installing Node.js from system package repositories..."
+        run_quiet "Installing nodejs via apt" ${SUDO} apt-get install -y nodejs npm && NODE_INSTALLED_VIA_APT=true
+    fi
+
+    if [ "${NODE_INSTALLED_VIA_APT}" = true ]; then
+        # Verify the apt-installed version is actually compatible
+        if command -v node >/dev/null 2>&1; then
+            NODE_VER="$(node -v | sed 's/v//')"
+            NODE_MAJOR="$(echo "${NODE_VER}" | cut -d. -f1)"
+            if [ "${NODE_MAJOR}" -ge 18 ]; then
+                NEED_NODE_INSTALL=false
+                log_info "Node.js $(node -v) installed from system repositories."
+            fi
+        fi
+    fi
+
+    # Strategy 2: Download the official Node.js binary tarball from nodejs.org.
+    # This is distribution-agnostic and works on Ubuntu, Debian, Kali, and any Linux.
+    if [ "${NEED_NODE_INSTALL}" = true ]; then
+        log_info "Installing Node.js ${NODE_20_VERSION} from the official nodejs.org binary distribution..."
+
+        # Determine architecture for the download URL
+        case "${ARCH}" in
+            x86_64)  NODE_ARCH="x64" ;;
+            aarch64) NODE_ARCH="arm64" ;;
+            armv7l)  NODE_ARCH="armv7l" ;;
+            *)
+                log_error "Unsupported architecture for Node.js binary download: ${ARCH}"
+                exit 1
+                ;;
+        esac
+
+        NODE_TARBALL="node-v${NODE_20_VERSION}-linux-${NODE_ARCH}.tar.xz"
+        NODE_URL="https://nodejs.org/dist/v${NODE_20_VERSION}/${NODE_TARBALL}"
+        NODE_INSTALL_DIR="/usr/local"
+
+        run_quiet "Downloading Node.js ${NODE_20_VERSION}" curl -fsSL "${NODE_URL}" -o "/tmp/${NODE_TARBALL}"
+
+        log_info "Extracting Node.js to ${NODE_INSTALL_DIR}..."
+        ${SUDO} tar -xJf "/tmp/${NODE_TARBALL}" -C "${NODE_INSTALL_DIR}" --strip-components=1 >> "${INSTALL_LOG}" 2>&1
+        rm -f "/tmp/${NODE_TARBALL}"
+        export PATH="/usr/local/bin:$PATH"
+
+        # Verify installation
+        if ! command -v node >/dev/null 2>&1; then
+            log_error "Node.js binary not found in PATH after installation."
+            exit 1
+        fi
+        log_info "Node.js $(node -v) installed from official binary tarball."
+    fi
 fi
 
 log_info "Node.js version: $(node -v), npm version: $(npm -v)"
@@ -232,9 +283,13 @@ log_info "Node.js version: $(node -v), npm version: $(npm -v)"
 log_step "4/9 Verifying Docker Engine & Container Execution Environment"
 
 if ! command -v docker >/dev/null 2>&1; then
-    log_info "Docker CLI not detected. Installing Docker Engine and Docker Compose plugin..."
+    log_info "Docker CLI not detected. Installing Docker Engine..."
     run_quiet "Updating apt list" ${SUDO} apt-get update -y
-    run_quiet "Installing Docker packages" ${SUDO} apt-get install -y docker.io docker-compose-plugin
+    # Install docker.io (available on Debian, Ubuntu, and Kali).
+    # Also attempt to install docker-compose-plugin; fall back silently
+    # on distributions that package it separately or not at all.
+    run_quiet "Installing Docker Engine" ${SUDO} apt-get install -y docker.io
+    ${SUDO} apt-get install -y docker-compose-plugin >> "${INSTALL_LOG}" 2>&1 || true
 fi
 
 # Ensure the Docker service is running
@@ -396,11 +451,40 @@ log_success "Backend virtual environment and dependencies validated."
 log_step "7/9 Installing Browser Head Playwright Chromium & System Libraries"
 
 log_info "Installing Playwright Linux system dependencies..."
+PW_DEPS_INSTALLED=false
 if [ "$(id -u)" -eq 0 ]; then
-    run_quiet "Installing Playwright system dependencies" "${VENV_PY}" -m playwright install-deps chromium
+    if "${VENV_PY}" -m playwright install-deps chromium >> "${INSTALL_LOG}" 2>&1; then
+        PW_DEPS_INSTALLED=true
+    fi
 else
     # Install system dependencies with elevated privileges
-    run_quiet "Installing Playwright system dependencies via sudo" ${SUDO} "${VENV_PY}" -m playwright install-deps chromium
+    if ${SUDO} "${VENV_PY}" -m playwright install-deps chromium >> "${INSTALL_LOG}" 2>&1; then
+        PW_DEPS_INSTALLED=true
+    fi
+fi
+
+if [ "${PW_DEPS_INSTALLED}" = false ]; then
+    log_warn "playwright install-deps skipped or unsupported on this distribution (${DISTRO})."
+    log_info "Installing standard Chromium system dependencies via package manager..."
+    ${SUDO} apt-get update -y >> "${INSTALL_LOG}" 2>&1 || true
+    ${SUDO} apt-get install -y --no-install-recommends \
+        libnss3 \
+        libatk1.0-0 \
+        libatk-bridge2.0-0 \
+        libcups2 \
+        libdrm2 \
+        libxkbcommon0 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxfixes3 \
+        libxrandr2 \
+        libgbm1 \
+        libpango-1.0-0 \
+        libcairo2 \
+        libx11-xcb1 \
+        libxcb-dri3-0 >> "${INSTALL_LOG}" 2>&1 || true
+    ${SUDO} apt-get install -y --no-install-recommends libasound2 >> "${INSTALL_LOG}" 2>&1 || \
+    ${SUDO} apt-get install -y --no-install-recommends libasound2t64 >> "${INSTALL_LOG}" 2>&1 || true
 fi
 
 log_info "Installing Playwright Chromium browser binary..."
