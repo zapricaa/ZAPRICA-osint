@@ -421,7 +421,12 @@ log_info "Installing pinned dependencies from backend/requirements.txt..."
 run_quiet "Installing backend dependencies" "${VENV_PIP}" install -r "${REPO_ROOT}/backend/requirements.txt"
 
 log_info "Installing backend package in editable development mode..."
-run_quiet "Installing editable backend package" "${VENV_PIP}" install -e "${REPO_ROOT}/backend"
+if ! "${VENV_PIP}" install -e "${REPO_ROOT}/backend" >> "${INSTALL_LOG}" 2>&1; then
+    log_warn "Standard editable install encountered build issue. Fallback linking via .pth file..."
+    SITE_PACKAGES="$("${VENV_PY}" -c "import site; print(site.getsitepackages()[0])")"
+    echo "${REPO_ROOT}/backend" > "${SITE_PACKAGES}/zaprica_backend.pth"
+    log_info "Linked backend package via zaprica_backend.pth in site-packages."
+fi
 
 log_info "Verifying critical backend package imports..."
 "${VENV_PY}" -c "
