@@ -30,6 +30,7 @@ export default function LoginPage() {
       const res = await apiFetch<any>("/auth/login", {
         method: "POST",
         body: JSON.stringify({
+          username_or_email: identifier,
           identifier,
           password,
           mfa_code: mfaCode || null,

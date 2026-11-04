@@ -2,8 +2,8 @@
 
 import uuid
 from datetime import datetime
-from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from typing import Any, List, Optional
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 
 # -------------------------------------------------------------------------
@@ -15,6 +15,14 @@ class UserLogin(BaseModel):
     username_or_email: str = Field(..., min_length=3, max_length=255)
     password: str = Field(..., min_length=1, max_length=128)
     mfa_code: Optional[str] = Field(None, min_length=6, max_length=6)
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_identifier(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("username_or_email") and data.get("identifier"):
+                data["username_or_email"] = data["identifier"]
+        return data
 
 
 class MFARequiredResponse(BaseModel):
