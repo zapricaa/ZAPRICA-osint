@@ -30,15 +30,25 @@ export default function NewInvestigationPage() {
       : [];
 
     try {
+      const obj = description.trim() || `Investigation on ${target.trim()}`;
+      const targets = allowlistArr.length > 0 ? allowlistArr : [target.trim()];
+
       const payload = {
         title: title.trim(),
-        description: description.trim(),
+        objective: obj,
+        description: obj,
         target: target.trim(),
         target_type: targetType,
+        investigation_type: targetType.toLowerCase(),
+        priority: "medium",
         mode,
         scope: {
-          allowlist: allowlistArr,
+          purpose: obj,
+          allowed_targets: targets,
+          allowlist: targets,
+          denied_targets: denylistArr,
           denylist: denylistArr,
+          allowed_operations: ["public_website_metadata", "content_extraction"],
         },
       };
 
