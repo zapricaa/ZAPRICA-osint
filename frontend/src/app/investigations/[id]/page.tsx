@@ -155,8 +155,20 @@ export default function InvestigationDetailPage() {
     );
   }
 
-  const isRunning = investigation.status === "RUNNING";
-  const isCompleted = investigation.status === "COMPLETED";
+  const statusUpper = (investigation.status || "").toUpperCase();
+  const isDraft = statusUpper === "DRAFT";
+  const isRunning = statusUpper === "RUNNING" || statusUpper === "PLANNING" || statusUpper === "QUEUED";
+  const isCompleted = statusUpper === "COMPLETED";
+
+  const targetDisplay =
+    investigation.target ||
+    (investigation.scope?.allowed_targets && investigation.scope.allowed_targets[0]) ||
+    "N/A";
+  const targetTypeDisplay =
+    investigation.target_type ||
+    investigation.investigation_type ||
+    "TARGET";
+  const objectiveDisplay = investigation.objective || investigation.description || "";
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -166,15 +178,15 @@ export default function InvestigationDetailPage() {
           <div className="space-y-1">
             <div className="flex items-center gap-2.5">
               <span className={`text-[11px] font-mono px-2.5 py-0.5 rounded-full border ${
-                investigation.status === "COMPLETED"
+                isCompleted
                   ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300"
-                  : investigation.status === "FAILED"
+                  : statusUpper === "FAILED"
                   ? "bg-rose-950/60 border-rose-500/40 text-rose-300"
-                  : investigation.status === "RUNNING"
+                  : isRunning
                   ? "bg-blue-950/60 border-blue-500/40 text-blue-300 animate-pulse"
                   : "bg-slate-800 border-slate-700 text-slate-300"
               }`}>
-                {investigation.status}
+                {statusUpper}
               </span>
               <span className="text-xs font-mono text-slate-500">ID: {investigation.id}</span>
             </div>
@@ -186,7 +198,7 @@ export default function InvestigationDetailPage() {
             <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-slate-400 pt-1">
               <span className="flex items-center gap-1.5">
                 <Target className="w-3.5 h-3.5 text-blue-400" />
-                Target: <strong className="text-slate-200">{investigation.target}</strong> ({investigation.target_type})
+                Target: <strong className="text-slate-200">{targetDisplay}</strong> ({targetTypeDisplay})
               </span>
               <span>•</span>
               <span>Mode: {investigation.mode || "AUTOMATED"}</span>
@@ -197,7 +209,7 @@ export default function InvestigationDetailPage() {
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
-            {investigation.status === "DRAFT" && (
+            {isDraft && (
               <button
                 onClick={handleStart}
                 disabled={actionLoading}
@@ -246,9 +258,9 @@ export default function InvestigationDetailPage() {
           </div>
         )}
 
-        {investigation.description && (
+        {objectiveDisplay && (
           <p className="text-xs text-slate-400 border-t border-slate-800/80 pt-3">
-            {investigation.description}
+            {objectiveDisplay}
           </p>
         )}
       </div>
@@ -265,7 +277,7 @@ export default function InvestigationDetailPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-2 text-center text-xs font-mono">
           <div className={`p-2.5 rounded-lg border ${
-            investigation.status !== "DRAFT"
+            !isDraft
               ? "bg-blue-950/40 border-blue-500/40 text-blue-300"
               : "bg-slate-900 border-slate-800 text-slate-500"
           }`}>
