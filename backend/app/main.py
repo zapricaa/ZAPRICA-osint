@@ -2,7 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy import text
 
@@ -130,6 +130,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 @app.get(f"{settings.API_V1_STR}/me", response_model=CurrentUserOut, tags=["Identity"])
 async def me_shortcut(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     return await AuthService.get_current_user_profile(db, current_user.id)
+
+
+@app.get("/docs", include_in_schema=False)
+async def redirect_to_docs():
+    return RedirectResponse(url=f"{settings.API_V1_STR}/docs")
 
 
 @app.get("/")
