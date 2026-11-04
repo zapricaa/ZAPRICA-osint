@@ -605,8 +605,11 @@ log_success "Backend components and DCE coordinator validated."
 log_step "Building Frontend Production Bundle"
 (
     cd "${REPO_ROOT}/frontend"
-    log_info "Installing frontend dependencies using npm ci..."
-    run_quiet "Running npm ci" npm ci
+    log_info "Installing frontend dependencies using npm..."
+    if ! run_quiet "Running npm ci" npm ci; then
+        log_warn "npm ci failed. Falling back to npm install..."
+        run_quiet "Running npm install" npm install
+    fi
     STATUS_MAP["frontend_deps"]="PASS"
 
     log_info "Compiling Next.js 14 production build..."
