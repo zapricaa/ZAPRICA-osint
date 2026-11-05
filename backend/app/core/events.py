@@ -26,10 +26,11 @@ class InvestigationEvent:
             "id": self.event_id,
             "investigation_id": self.investigation_id,
             "event_type": self.event_type,
+            "type": self.event_type,
             "timestamp": self.timestamp.isoformat(),
             "data": self.data,
         }
-        return f"id: {self.event_id}\nevent: {self.event_type}\ndata: {json.dumps(payload)}\n\n"
+        return f"id: {self.event_id}\ndata: {json.dumps(payload)}\n\n"
 
 
 class EventBus:

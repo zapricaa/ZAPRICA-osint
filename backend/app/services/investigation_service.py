@@ -279,6 +279,11 @@ class InvestigationService:
         from app.agents.main_head.graph import MainHeadGraphRunner
         runner = MainHeadGraphRunner.build_graph(session)
         target = inv.scope.allowed_targets[0] if (inv.scope and inv.scope.allowed_targets) else "example.com"
+        allowed_targets = list(inv.scope.allowed_targets) if (inv.scope and inv.scope.allowed_targets) else [target]
+        if target not in allowed_targets:
+            allowed_targets.append(target)
+        denied_targets = list(inv.scope.denied_targets) if (inv.scope and inv.scope.denied_targets) else []
+
         initial_state = {
             "investigation_id": str(inv.id),
             "workspace_id": str(workspace_id),
@@ -286,7 +291,8 @@ class InvestigationService:
             "target": target,
             "objective": inv.objective,
             "scope": {
-                "allowed_targets": inv.scope.allowed_targets if inv.scope else [],
+                "allowed_targets": allowed_targets,
+                "denied_targets": denied_targets,
                 "allowed_operations": inv.scope.allowed_operations if inv.scope else [],
                 "purpose": inv.scope.purpose if inv.scope else "",
             },

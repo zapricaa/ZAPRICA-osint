@@ -210,27 +210,15 @@ def _roles_match(user_role: Optional[str], allowed_roles: List[str]) -> bool:
 
 
 def require_role(allowed_roles: List[str]):
-    """Enforce workspace role permission check."""
+    """Enforce workspace role permission check and return verified User."""
     async def role_checker(
         user: User = Depends(get_current_user),
         workspace: Workspace = Depends(get_current_workspace),
-    ) -> WorkspaceMembership:
+    ) -> User:
         user_roles = [ur.role.name for ur in user.user_roles if ur.role]
         if "SUPER_ADMIN" in user_roles or any(_normalize_role_str(r) == "super_admin" for r in user_roles):
             # Super Admin bypasses workspace role constraints
-            matching = next(
-                (m for m in user.memberships if m.workspace_id == workspace.id),
-                None,
-            )
-            if matching:
-                return matching
-            # Synthesize virtual membership for Super Admin
-            return WorkspaceMembership(
-                workspace_id=workspace.id,
-                user_id=user.id,
-                role="super_admin",
-                status="active",
-            )
+            return user
 
         membership = next(
             (m for m in user.memberships if m.workspace_id == workspace.id and m.status == "active"),
@@ -241,7 +229,7 @@ def require_role(allowed_roles: List[str]):
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Operation requires one of the following roles: {allowed_roles}. Current role: {getattr(membership, 'role', 'none')}.",
             )
-        return membership
+        return user
 
     return role_checker
 

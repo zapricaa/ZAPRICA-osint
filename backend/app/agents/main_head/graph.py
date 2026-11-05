@@ -74,11 +74,21 @@ class MainHeadGraphRunner:
         # 2. Scope Gate Node: Deterministic Security Check (AC-MAIN-04)
         async def scope_gate(state: InvestigationState) -> Dict[str, Any]:
             target = state["target"].strip().lower()
-            allowed_targets = [t.lower() for t in state.get("scope", {}).get("allowed_targets", [])]
-            denied_targets = [d.lower() for d in state.get("scope", {}).get("denied_targets", [])]
+            clean_target = (
+                target.replace("https://", "")
+                .replace("http://", "")
+                .split("/")[0]
+                .split(":")[0]
+                .strip()
+            )
+            allowed_targets = [t.lower().strip() for t in state.get("scope", {}).get("allowed_targets", [])]
+            denied_targets = [d.lower().strip() for d in state.get("scope", {}).get("denied_targets", [])]
 
             # Denylist check
-            if any(target == d or (d.startswith("*.") and target.endswith(d[2:])) for d in denied_targets):
+            if any(
+                target == d or clean_target == d or (d.startswith("*.") and (target.endswith(d[2:]) or clean_target.endswith(d[2:])))
+                for d in denied_targets
+            ):
                 err_msg = f"Security Policy Violation: Target '{target}' is on the investigation denylist."
                 await event_bus.publish(
                     InvestigationEvent(
@@ -91,7 +101,7 @@ class MainHeadGraphRunner:
 
             # Allowlist check
             allowed = any(
-                target == a or (a.startswith("*.") and target.endswith(a[2:]))
+                target == a or clean_target == a or (a.startswith("*.") and (target.endswith(a[2:]) or clean_target.endswith(a[2:])))
                 for a in allowed_targets
             )
 

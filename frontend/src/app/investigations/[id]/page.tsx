@@ -80,8 +80,18 @@ export default function InvestigationDetailPage() {
           const parsed = JSON.parse(event.data);
           setEvents((prev) => [parsed, ...prev]);
 
-          // Refresh status if task or state updated
-          if (parsed.type === "STATUS_UPDATE" || parsed.type === "COMPLETED") {
+          // Refresh investigation status if any operational event occurs
+          const eventType = (parsed.event_type || parsed.type || "").toLowerCase();
+          if (
+            eventType.includes("status") ||
+            eventType.includes("plan") ||
+            eventType.includes("task") ||
+            eventType.includes("finding") ||
+            eventType.includes("report") ||
+            eventType.includes("complete") ||
+            eventType.includes("fail") ||
+            eventType.includes("started")
+          ) {
             loadData();
           }
         } catch {

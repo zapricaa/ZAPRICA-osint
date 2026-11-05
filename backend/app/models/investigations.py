@@ -36,6 +36,12 @@ class Investigation(Base):
     evidence_artifacts: Mapped[list["EvidenceArtifact"]] = relationship("EvidenceArtifact", back_populates="investigation", cascade="all, delete-orphan")
     reports: Mapped[list["Report"]] = relationship("Report", back_populates="investigation", cascade="all, delete-orphan")
 
+    @property
+    def target(self) -> Optional[str]:
+        if self.scope and self.scope.allowed_targets and len(self.scope.allowed_targets) > 0:
+            return str(self.scope.allowed_targets[0])
+        return None
+
     __table_args__ = (
         Index("ix_investigations_workspace_created", "workspace_id", "created_at"),
         Index("ix_investigations_workspace_status", "workspace_id", "status"),

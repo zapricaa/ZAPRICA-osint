@@ -51,3 +51,12 @@ class User(Base):
     @property
     def is_active(self) -> bool:
         return self.status == "active" and not self.is_locked
+
+    @property
+    def workspace_id(self) -> Optional[uuid.UUID]:
+        if self.memberships:
+            active = next((m for m in self.memberships if getattr(m, "status", "") == "active"), None)
+            if active:
+                return active.workspace_id
+            return self.memberships[0].workspace_id
+        return None

@@ -27,11 +27,16 @@ export default function InvestigationsPage() {
   }, []);
 
   const filtered = investigations.filter((inv) => {
+    const targetVal =
+      inv.target ||
+      (inv.scope?.allowed_targets && inv.scope.allowed_targets[0]) ||
+      "";
     const matchesSearch =
       (inv.title || "").toLowerCase().includes(search.toLowerCase()) ||
-      (inv.target || "").toLowerCase().includes(search.toLowerCase());
+      targetVal.toLowerCase().includes(search.toLowerCase());
+    const invStatusUpper = (inv.status || "").toUpperCase();
     const matchesStatus =
-      statusFilter === "ALL" || inv.status === statusFilter;
+      statusFilter === "ALL" || invStatusUpper === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
@@ -115,18 +120,18 @@ export default function InvestigationsPage() {
               <div>
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
-                    inv.status === "COMPLETED"
+                    (inv.status || "").toUpperCase() === "COMPLETED"
                       ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300"
-                      : inv.status === "FAILED"
+                      : (inv.status || "").toUpperCase() === "FAILED"
                       ? "bg-rose-950/60 border-rose-500/40 text-rose-300"
-                      : inv.status === "RUNNING"
+                      : (inv.status || "").toUpperCase() === "RUNNING"
                       ? "bg-blue-950/60 border-blue-500/40 text-blue-300 animate-pulse"
-                      : "bg-slate-800 border-slate-700 text-slate-400"
+                      : "bg-slate-800 border-slate-700 text-slate-300"
                   }`}>
-                    {inv.status}
+                    {(inv.status || "DRAFT").toUpperCase()}
                   </span>
-                  <span className="text-[10px] font-mono text-slate-500">
-                    {inv.target_type || "TARGET"}
+                  <span className="text-[10px] font-mono text-slate-500 uppercase">
+                    {inv.investigation_type || inv.target_type || "TARGET"}
                   </span>
                 </div>
 
@@ -136,12 +141,12 @@ export default function InvestigationsPage() {
 
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-400 font-mono">
                   <Target className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <span className="truncate">{inv.target}</span>
+                  <span className="truncate">{inv.target || inv.scope?.allowed_targets?.[0] || "N/A"}</span>
                 </div>
 
-                {inv.description && (
+                {(inv.objective || inv.description) && (
                   <p className="mt-2 text-xs text-slate-500 line-clamp-2">
-                    {inv.description}
+                    {inv.objective || inv.description}
                   </p>
                 )}
               </div>

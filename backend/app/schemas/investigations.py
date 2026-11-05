@@ -75,6 +75,7 @@ class InvestigationOut(BaseModel):
     workspace_id: uuid.UUID
     created_by: Optional[uuid.UUID]
     title: str
+    target: Optional[str] = None
     objective: str
     investigation_type: str
     status: str

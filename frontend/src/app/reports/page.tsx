@@ -25,7 +25,14 @@ export default function ReportsPage() {
               const rep = await apiFetch<any>(`/investigations/${invId}/report`);
               setSelectedReport(rep);
             } catch {
-              // ignore
+              try {
+                const reps = await apiFetch<any>(`/investigations/${invId}/reports`);
+                if (Array.isArray(reps) && reps.length > 0) {
+                  setSelectedReport(reps[0]);
+                }
+              } catch {
+                // ignore
+              }
             }
           }
         }
@@ -43,6 +50,15 @@ export default function ReportsPage() {
       const rep = await apiFetch<any>(`/investigations/${invId}/report`);
       setSelectedReport(rep);
     } catch {
+      try {
+        const reps = await apiFetch<any>(`/investigations/${invId}/reports`);
+        if (Array.isArray(reps) && reps.length > 0) {
+          setSelectedReport(reps[0]);
+          return;
+        }
+      } catch {
+        // ignore
+      }
       setSelectedReport(null);
     }
   };

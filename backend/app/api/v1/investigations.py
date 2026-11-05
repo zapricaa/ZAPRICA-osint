@@ -1,6 +1,6 @@
 import uuid
 from typing import Optional, List
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -274,6 +274,27 @@ async def list_reports(
         investigation_id=investigationId,
     )
     return [ReportOut.model_validate(r) for r in reports]
+
+
+@router.get(
+    "/{investigationId}/report",
+    response_model=ReportOut,
+    summary="Get latest report for an investigation (alias)"
+)
+async def get_latest_report(
+    investigationId: uuid.UUID,
+    workspace: Workspace = Depends(get_current_workspace),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    reports = await InvestigationService.list_reports(
+        session=db,
+        workspace_id=workspace.id,
+        investigation_id=investigationId,
+    )
+    if not reports:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found for this investigation.")
+    return ReportOut.model_validate(reports[0])
 
 
 @router.post(
