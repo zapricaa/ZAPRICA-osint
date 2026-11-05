@@ -100,3 +100,4 @@ echo ""
 
 # Wait on both background processes
 wait "${BACKEND_PID}" "${FRONTEND_PID}"
+
