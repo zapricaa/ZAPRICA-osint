@@ -56,7 +56,9 @@ async def get_agent_fleet_status(
                 "host_execution_blocked": True,
             },
         },
+        "safe_mode": safe_status["safe_mode"],
         "safe_startup_mode": safe_status["safe_mode"],
+        "terminal_execution_enabled": safe_status.get("terminal_execution_enabled", False),
         "workers_state": safe_status["workers_state"],
     }
 

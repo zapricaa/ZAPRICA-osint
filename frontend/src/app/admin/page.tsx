@@ -70,8 +70,18 @@ export default function AdminConsolePage() {
         const l = logRes.value;
         setLoginAttempts(Array.isArray(l) ? l : (l?.items || []));
       }
-      if (smRes.status === "fulfilled") {
-        setSafeModeStatus(smRes.value);
+      let smData = null;
+      if (smRes.status === "fulfilled" && smRes.value) {
+        smData = smRes.value;
+      } else {
+        try {
+          smData = await apiFetch<any>("/admin/safe-mode");
+        } catch {
+          // ignore
+        }
+      }
+      if (smData) {
+        setSafeModeStatus(smData);
       }
     } catch (err) {
       console.error("Admin load error:", err);
@@ -81,6 +91,19 @@ export default function AdminConsolePage() {
   };
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (
+        tabParam === "safemode" ||
+        tabParam === "users" ||
+        tabParam === "invites" ||
+        tabParam === "sessions" ||
+        tabParam === "audit"
+      ) {
+        setActiveTab(tabParam as any);
+      }
+    }
     loadAll();
   }, []);
 
@@ -148,20 +171,53 @@ export default function AdminConsolePage() {
     }
   };
 
+  const handleToggleSafeMode = async () => {
+    const currentState = safeModeStatus ? Boolean(safeModeStatus.safe_mode) : true;
+    const nextState = !currentState;
+    const confirmMsg = nextState
+      ? "Re-enable Safe Startup Mode? Automated worker pipelines will return to fail-closed idle state."
+      : "SECURITY CLEARANCE: Disable Safe Startup Mode? Multi-agent investigation execution and background workers will be permitted to run.";
+    if (!window.confirm(confirmMsg)) return;
+
+    setActionLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch<any>(`/admin/safe-mode/toggle?enabled=${nextState}`, {
+        method: "POST",
+        body: JSON.stringify({ enabled: nextState }),
+      });
+      if (res) {
+        setSafeModeStatus(res);
+      }
+      await loadAll();
+    } catch (err: any) {
+      setError(err.message || "Failed to update Safe Mode state.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleToggleTerminal = async () => {
-    if (!safeModeStatus) return;
-    const nextState = !safeModeStatus.terminal_execution_enabled;
+    const currentState = safeModeStatus ? Boolean(safeModeStatus.terminal_execution_enabled) : false;
+    const nextState = !currentState;
     const confirmMsg = nextState
       ? "SECURITY ALERT: Enable sandboxed terminal execution? Tools will run within Docker containers."
       : "Disable terminal execution? All agent terminal calls will fail closed.";
     if (!window.confirm(confirmMsg)) return;
 
     setActionLoading(true);
+    setError(null);
     try {
-      await apiFetch("/admin/safe-mode/terminal-execution", {
+      const res = await apiFetch<any>(`/admin/safe-mode/terminal-execution?enabled=${nextState}`, {
         method: "POST",
         body: JSON.stringify({ enabled: nextState }),
       });
+      if (res && typeof res.terminal_execution_enabled === "boolean") {
+        setSafeModeStatus((prev: any) => ({
+          ...prev,
+          terminal_execution_enabled: res.terminal_execution_enabled,
+        }));
+      }
       await loadAll();
     } catch (err: any) {
       setError(err.message || "Failed to update terminal execution state.");
@@ -212,11 +268,10 @@ export default function AdminConsolePage() {
       <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
         <button
           onClick={() => setActiveTab("users")}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition ${
-            activeTab === "users"
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition ${activeTab === "users"
               ? "bg-blue-600/20 text-blue-400 border border-blue-500/30"
               : "text-slate-400 hover:text-slate-200"
-          }`}
+            }`}
         >
           <Users className="w-3.5 h-3.5" />
           <span>Users ({users.length})</span>
@@ -224,11 +279,10 @@ export default function AdminConsolePage() {
 
         <button
           onClick={() => setActiveTab("invites")}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition ${
-            activeTab === "invites"
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition ${activeTab === "invites"
               ? "bg-blue-600/20 text-blue-400 border border-blue-500/30"
               : "text-slate-400 hover:text-slate-200"
-          }`}
+            }`}
         >
           <KeyRound className="w-3.5 h-3.5" />
           <span>Invitations ({invitations.length})</span>
@@ -236,11 +290,10 @@ export default function AdminConsolePage() {
 
         <button
           onClick={() => setActiveTab("sessions")}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition ${
-            activeTab === "sessions"
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition ${activeTab === "sessions"
               ? "bg-blue-600/20 text-blue-400 border border-blue-500/30"
               : "text-slate-400 hover:text-slate-200"
-          }`}
+            }`}
         >
           <Activity className="w-3.5 h-3.5" />
           <span>Active Sessions ({sessions.length})</span>
@@ -248,11 +301,10 @@ export default function AdminConsolePage() {
 
         <button
           onClick={() => setActiveTab("audit")}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition ${
-            activeTab === "audit"
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition ${activeTab === "audit"
               ? "bg-blue-600/20 text-blue-400 border border-blue-500/30"
               : "text-slate-400 hover:text-slate-200"
-          }`}
+            }`}
         >
           <Shield className="w-3.5 h-3.5" />
           <span>Login Audit Trail ({loginAttempts.length})</span>
@@ -260,11 +312,10 @@ export default function AdminConsolePage() {
 
         <button
           onClick={() => setActiveTab("safemode")}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition ${
-            activeTab === "safemode"
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition ${activeTab === "safemode"
               ? "bg-amber-600/20 text-amber-400 border border-amber-500/30"
               : "text-slate-400 hover:text-slate-200"
-          }`}
+            }`}
         >
           <Terminal className="w-3.5 h-3.5" />
           <span>Safe Mode & Execution</span>
@@ -294,13 +345,12 @@ export default function AdminConsolePage() {
                       <div className="text-[11px] text-slate-500">{u.email}</div>
                     </td>
                     <td className="p-3.5">
-                      <span className={`px-2 py-0.5 rounded text-[10px] ${
-                        u.status === "ACTIVE"
+                      <span className={`px-2 py-0.5 rounded text-[10px] ${u.status === "ACTIVE"
                           ? "bg-emerald-950 text-emerald-400 border border-emerald-800"
                           : u.status === "SUSPENDED"
-                          ? "bg-amber-950 text-amber-400 border border-amber-800"
-                          : "bg-rose-950 text-rose-400 border border-rose-800"
-                      }`}>
+                            ? "bg-amber-950 text-amber-400 border border-amber-800"
+                            : "bg-rose-950 text-rose-400 border border-rose-800"
+                        }`}>
                         {u.status}
                       </span>
                     </td>
@@ -429,9 +479,8 @@ export default function AdminConsolePage() {
                     <td className="p-3.5 font-semibold text-slate-200">{inv.email}</td>
                     <td className="p-3.5 text-slate-300">{inv.role_name || "INVESTIGATOR"}</td>
                     <td className="p-3.5">
-                      <span className={`px-2 py-0.5 rounded text-[10px] ${
-                        inv.is_used ? "bg-slate-800 text-slate-500" : "bg-emerald-950 text-emerald-400 border border-emerald-800"
-                      }`}>
+                      <span className={`px-2 py-0.5 rounded text-[10px] ${inv.is_used ? "bg-slate-800 text-slate-500" : "bg-emerald-950 text-emerald-400 border border-emerald-800"
+                        }`}>
                         {inv.is_used ? "USED" : "PENDING"}
                       </span>
                     </td>
@@ -452,51 +501,131 @@ export default function AdminConsolePage() {
       {/* Safe Mode Controller Tab */}
       {activeTab === "safemode" && (
         <div className="space-y-6">
-          <div className="p-6 rounded-xl bg-slate-900/60 border border-slate-800 space-y-4">
-            <div className="flex items-center justify-between">
+          <div className="p-6 rounded-xl bg-slate-900/60 border border-slate-800 space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
               <div>
                 <h3 className="font-mono text-base font-bold text-slate-100 flex items-center gap-2">
                   <Terminal className="w-5 h-5 text-amber-400" />
-                  SAFE STARTUP MODE & EXECUTION CONTROLS
+                  SAFE STARTUP MODE & RUNTIME EXECUTION CONTROLS
                 </h3>
                 <p className="text-xs text-slate-400 font-mono mt-1">
-                  Enforces default fail-closed posture across all worker runtimes
+                  Enforce or relax fail-closed posture across multi-agent runtimes, workers, and CLI execution gates
                 </p>
               </div>
 
-              <span className="px-2.5 py-1 rounded bg-amber-950 border border-amber-800 text-amber-300 font-mono text-xs">
-                SAFE MODE: ACTIVE
-              </span>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`px-3 py-1 rounded font-mono text-xs font-semibold flex items-center gap-2 border ${safeModeStatus?.safe_mode ?? true
+                      ? "bg-amber-950 border-amber-800 text-amber-300"
+                      : "bg-emerald-950 border-emerald-800 text-emerald-300"
+                    }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${safeModeStatus?.safe_mode ?? true ? "bg-amber-400 animate-pulse" : "bg-emerald-400"
+                      }`}
+                  />
+                  {safeModeStatus?.safe_mode ?? true
+                    ? "SAFE MODE: ACTIVE (FAIL-CLOSED)"
+                    : "SAFE MODE: DISABLED (OPERATIONAL)"}
+                </span>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-              <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 space-y-2">
-                <span className="text-xs font-mono text-slate-500 uppercase">Terminal Execution Gate</span>
-                <div className="text-lg font-bold font-mono text-slate-200">
-                  {safeModeStatus?.terminal_execution_enabled ? "ENABLED" : "DISABLED (DEFAULT)"}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Card 1: Global Safe Mode Toggle */}
+              <div className="p-5 rounded-lg bg-slate-950 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono text-slate-400 uppercase font-semibold">
+                    Global Safe Startup Mode
+                  </span>
+                  <span
+                    className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded ${safeModeStatus?.safe_mode ?? true
+                        ? "bg-amber-950 text-amber-400 border border-amber-800"
+                        : "bg-emerald-950 text-emerald-400 border border-emerald-800"
+                      }`}
+                  >
+                    {safeModeStatus?.safe_mode ?? true ? "ACTIVE (FAIL-CLOSED)" : "DISABLED (LIVE)"}
+                  </span>
                 </div>
-                <p className="text-xs text-slate-400">
-                  When disabled, any attempt by agents to invoke CLI/host commands fails immediately with a security exception.
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  When active, workers and automated pipelines start in an idle fail-closed state. Disabling safe mode allows multi-agent pipelines to run tasks without administrative pause.
                 </p>
-                <button
-                  onClick={handleToggleTerminal}
-                  disabled={actionLoading}
-                  className={`mt-2 px-3 py-1.5 rounded font-mono text-xs font-semibold uppercase tracking-wider transition ${
-                    safeModeStatus?.terminal_execution_enabled
-                      ? "bg-rose-600 hover:bg-rose-500 text-white"
-                      : "bg-emerald-600 hover:bg-emerald-500 text-white"
-                  }`}
-                >
-                  {safeModeStatus?.terminal_execution_enabled ? "DISABLE TERMINAL EXECUTION" : "ENABLE TERMINAL EXECUTION"}
-                </button>
+                <div className="pt-2">
+                  <button
+                    onClick={handleToggleSafeMode}
+                    disabled={actionLoading}
+                    className={`w-full py-2 px-4 rounded font-mono text-xs font-bold uppercase tracking-wider transition ${safeModeStatus?.safe_mode ?? true
+                        ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20"
+                        : "bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-600/20"
+                      }`}
+                  >
+                    {actionLoading
+                      ? "PROCESSING..."
+                      : safeModeStatus?.safe_mode ?? true
+                        ? "DISABLE SAFE MODE"
+                        : "RE-ENABLE SAFE MODE"}
+                  </button>
+                </div>
               </div>
 
-              <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 space-y-2">
-                <span className="text-xs font-mono text-slate-500 uppercase">Database & Agent Lifespan</span>
-                <div className="text-lg font-bold font-mono text-emerald-400">
-                  READ-ONLY VERIFIED
+              {/* Card 2: Terminal Execution Gate */}
+              <div className="p-5 rounded-lg bg-slate-950 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono text-slate-400 uppercase font-semibold">
+                    Terminal Execution Gate
+                  </span>
+                  <span
+                    className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded ${safeModeStatus?.terminal_execution_enabled
+                        ? "bg-emerald-950 text-emerald-400 border border-emerald-800"
+                        : "bg-rose-950 text-rose-400 border border-rose-800"
+                      }`}
+                  >
+                    {safeModeStatus?.terminal_execution_enabled ? "ENABLED" : "DISABLED (DEFAULT)"}
+                  </span>
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  When disabled, any attempt by agents to invoke CLI/host commands fails closed. When enabled, execution runs strictly inside isolated non-root Docker containers.
+                </p>
+                <div className="pt-2">
+                  <button
+                    onClick={handleToggleTerminal}
+                    disabled={actionLoading}
+                    className={`w-full py-2 px-4 rounded font-mono text-xs font-bold uppercase tracking-wider transition ${safeModeStatus?.terminal_execution_enabled
+                        ? "bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/20"
+                        : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20"
+                      }`}
+                  >
+                    {actionLoading
+                      ? "PROCESSING..."
+                      : safeModeStatus?.terminal_execution_enabled
+                        ? "DISABLE TERMINAL EXECUTION"
+                        : "ENABLE TERMINAL EXECUTION"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Card 3: Agent Isolation Backend */}
+              <div className="p-5 rounded-lg bg-slate-950 border border-slate-800 space-y-2">
+                <span className="text-xs font-mono text-slate-400 uppercase font-semibold">
+                  Isolation Architecture
+                </span>
+                <div className="text-sm font-bold font-mono text-emerald-400">
+                  DOCKER SANDBOX (NON-ROOT)
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Host machine execution is permanently blocked. Command execution drops all Linux capabilities, uses read-only root filesystems and volatile tmpfs storage.
+                </p>
+              </div>
+
+              {/* Card 4: Database & State Safety */}
+              <div className="p-5 rounded-lg bg-slate-950 border border-slate-800 space-y-2">
+                <span className="text-xs font-mono text-slate-400 uppercase font-semibold">
+                  Database & Investigation Lifespan
+                </span>
+                <div className="text-sm font-bold font-mono text-emerald-400">
+                  READ-ONLY VERIFIED ON BOOT
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
                   No automated schema modifications or background investigations occur on startup. Execution requires authenticated operator launch.
                 </p>
               </div>

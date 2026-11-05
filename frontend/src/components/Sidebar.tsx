@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -17,6 +18,7 @@ import {
   UserCheck,
   Power
 } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Activity },
@@ -33,6 +35,35 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [safeMode, setSafeMode] = useState<boolean>(true);
+  const [terminalEnabled, setTerminalEnabled] = useState<boolean>(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchStatus = async () => {
+      try {
+        const res = await apiFetch<any>("/agents/status");
+        if (isMounted && res) {
+          const isSafe = res.safe_mode ?? res.safe_startup_mode ?? true;
+          setSafeMode(Boolean(isSafe));
+          const term =
+            res.fleet?.terminal_head?.terminal_execution_enabled ??
+            res.terminal_execution_enabled ??
+            false;
+          setTerminalEnabled(Boolean(term));
+        }
+      } catch {
+        // Retain safe defaults on unauthenticated or network boundary
+      }
+    };
+
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 8000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -83,16 +114,44 @@ export function Sidebar() {
 
       {/* Safe Mode Indicator & Logout */}
       <div className="p-4 border-t border-slate-800 bg-slate-900/30 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs text-amber-400 font-mono">
-            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-            <span>SAFE STARTUP ACTIVE</span>
+        <Link
+          href="/admin?tab=safemode"
+          title="Click to manage Safe Mode & Execution in Admin Console"
+          className="block group p-2 -mx-2 rounded-lg hover:bg-slate-900/90 border border-transparent hover:border-slate-800 transition"
+        >
+          <div className="flex items-center justify-between">
+            <div
+              className={`flex items-center gap-2 text-xs font-mono font-medium ${
+                safeMode ? "text-amber-400" : "text-emerald-400"
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  safeMode ? "bg-amber-500 animate-pulse" : "bg-emerald-500"
+                }`}
+              />
+              <span>{safeMode ? "SAFE STARTUP ACTIVE" : "OPERATIONAL MODE"}</span>
+            </div>
+            <span
+              className={`text-[10px] uppercase font-mono px-1.5 py-0.5 rounded border ${
+                safeMode
+                  ? "bg-slate-800 text-slate-400 border-slate-700"
+                  : "bg-emerald-950 text-emerald-300 border-emerald-800"
+              }`}
+            >
+              {safeMode ? "IDLE" : "LIVE"}
+            </span>
           </div>
-          <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
-            IDLE
-          </span>
-        </div>
-        <p className="text-[11px] text-slate-500">Terminal disabled by default • Strict isolated sandbox</p>
+          <p className="text-[11px] text-slate-500 mt-1 group-hover:text-slate-400 transition">
+            {safeMode
+              ? terminalEnabled
+                ? "Safe mode active • Terminal enabled"
+                : "Terminal disabled • Strict sandbox"
+              : terminalEnabled
+              ? "Live execution • Terminal enabled"
+              : "Live execution • Terminal disabled"}
+          </p>
+        </Link>
 
         <button
           onClick={handleLogout}

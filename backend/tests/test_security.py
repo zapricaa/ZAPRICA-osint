@@ -2,6 +2,7 @@ import pytest
 from fastapi import HTTPException
 from app.agents.terminal_head.tool_gateway import tool_gateway, DNSLookupArgs
 from app.agents.browser_head.ssrf_filter import SSRFEgressFilter, SecurityPolicyViolation
+from app.core.safe_mode import safe_mode_controller
 
 
 @pytest.mark.asyncio
@@ -50,18 +51,22 @@ def test_ac_sec_02_ssrf_egress_permits_public_destinations():
 @pytest.mark.asyncio
 async def test_ac_sec_04_schema_validation_and_adapter_safety():
     """AC-SEC-04: Tool arguments must strictly match Pydantic schema."""
-    # Attempting to execute unknown tool
-    with pytest.raises(HTTPException) as exc1:
-        await tool_gateway.execute_tool(
-            tool_id="unregistered_dangerous_tool",
-            arguments={"cmd": "whoami"}
-        )
-    assert exc1.value.status_code == 404
+    safe_mode_controller.enable_terminal_execution("test_admin", "Test schema validation")
+    try:
+        # Attempting to execute unknown tool
+        with pytest.raises(HTTPException) as exc1:
+            await tool_gateway.execute_tool(
+                tool_id="unregistered_dangerous_tool",
+                arguments={"cmd": "whoami"}
+            )
+        assert exc1.value.status_code == 404
 
-    # Invalid arguments for dns_lookup
-    with pytest.raises(HTTPException) as exc2:
-        await tool_gateway.execute_tool(
-            tool_id="dns_lookup",
-            arguments={"target": "x", "record_type": "DANGEROUS_TYPE"}  # fails min_length & pattern
-        )
-    assert exc2.value.status_code == 400
+        # Invalid arguments for dns_lookup
+        with pytest.raises(HTTPException) as exc2:
+            await tool_gateway.execute_tool(
+                tool_id="dns_lookup",
+                arguments={"target": "x", "record_type": "DANGEROUS_TYPE"}  # fails min_length & pattern
+            )
+        assert exc2.value.status_code == 400
+    finally:
+        safe_mode_controller.disable_terminal_execution("test_admin")

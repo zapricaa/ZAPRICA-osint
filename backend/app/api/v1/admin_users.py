@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -16,6 +17,7 @@ from app.models.reports import AuditEvent
 from app.models.sessions import LoginAttempt, Session
 from app.models.tools import Tool
 from app.models.users import User
+from app.models.workspaces import WorkspaceMembership
 from app.core.safe_mode import safe_mode_controller
 from app.schemas.auth import (
     AdminUserCreateRequest,
@@ -443,9 +445,23 @@ async def grant_tool_permission(
 # Safe Startup Mode Management
 # -----------------------------------------------------------------------------
 
+class TerminalExecutionTogglePayload(BaseModel):
+    enabled: Optional[bool] = None
+    reason: Optional[str] = "Admin activation of approved CLI adapters"
+
+
+class SafeModeTogglePayload(BaseModel):
+    enabled: Optional[bool] = None
+
+
 @router.get(
     "/safe-mode",
     summary="Get Safe Startup Mode status and agent states",
+    dependencies=[Depends(require_system_role(["SUPER_ADMIN", "ADMINISTRATOR"]))],
+)
+@router.get(
+    "/safe-mode/status",
+    summary="Get Safe Startup Mode status and agent states (alias)",
     dependencies=[Depends(require_system_role(["SUPER_ADMIN", "ADMINISTRATOR"]))],
 )
 async def get_safe_mode_status():
@@ -456,17 +472,29 @@ async def get_safe_mode_status():
 @router.post(
     "/safe-mode/terminal-execution",
     summary="Administrator toggle for terminal execution capability",
-    dependencies=[Depends(require_system_role(["SUPER_ADMIN"]))],
+    dependencies=[Depends(require_system_role(["SUPER_ADMIN", "ADMINISTRATOR"]))],
 )
 async def toggle_terminal_execution(
-    enabled: bool = Query(...),
-    reason: str = Query("Admin activation of approved CLI adapters", min_length=5),
+    payload: Optional[TerminalExecutionTogglePayload] = None,
+    enabled: Optional[bool] = Query(None),
+    reason: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Explicitly enable or disable terminal execution capabilities."""
-    if enabled:
-        safe_mode_controller.enable_terminal_execution(current_user.username, reason)
+    final_enabled = (
+        enabled
+        if enabled is not None
+        else (payload.enabled if payload and payload.enabled is not None else True)
+    )
+    final_reason = reason or (
+        payload.reason
+        if payload and payload.reason
+        else "Admin activation of approved CLI adapters"
+    )
+
+    if final_enabled:
+        safe_mode_controller.enable_terminal_execution(current_user.username, final_reason)
     else:
         safe_mode_controller.disable_terminal_execution(current_user.username)
 
@@ -485,29 +513,37 @@ async def toggle_terminal_execution(
             actor_type="user",
             action="terminal_execution_toggled",
             resource_type="system",
-            metadata_redacted={"enabled": enabled, "reason": reason},
+            metadata_redacted={"enabled": final_enabled, "reason": final_reason},
         )
     )
     await db.commit()
 
     return {
         "terminal_execution_enabled": safe_mode_controller.is_terminal_execution_enabled,
-        "message": f"Terminal execution has been {'enabled' if enabled else 'disabled'}.",
+        "safe_mode": safe_mode_controller.is_safe_mode,
+        "message": f"Terminal execution has been {'enabled' if final_enabled else 'disabled'}.",
     }
 
 
 @router.post(
     "/safe-mode/toggle",
     summary="Toggle safe mode globally",
-    dependencies=[Depends(require_system_role(["SUPER_ADMIN"]))],
+    dependencies=[Depends(require_system_role(["SUPER_ADMIN", "ADMINISTRATOR"]))],
 )
 async def toggle_safe_mode(
-    enabled: bool = Query(...),
+    payload: Optional[SafeModeTogglePayload] = None,
+    enabled: Optional[bool] = Query(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Toggle safe mode globally."""
-    safe_mode_controller.set_safe_mode(enabled, current_user.username)
+    final_enabled = (
+        enabled
+        if enabled is not None
+        else (payload.enabled if payload and payload.enabled is not None else False)
+    )
+
+    safe_mode_controller.set_safe_mode(final_enabled, current_user.username)
     user_mem = await db.scalar(
         select(WorkspaceMembership).where(
             and_(WorkspaceMembership.user_id == current_user.id, WorkspaceMembership.status == "active")
@@ -522,7 +558,7 @@ async def toggle_safe_mode(
             actor_type="user",
             action="safe_mode_toggled",
             resource_type="system",
-            metadata_redacted={"enabled": enabled},
+            metadata_redacted={"enabled": final_enabled},
         )
     )
     await db.commit()

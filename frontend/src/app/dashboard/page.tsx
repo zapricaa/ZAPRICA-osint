@@ -66,6 +66,19 @@ export default function DashboardPage() {
         if (safeModeRes.status === "fulfilled" && safeModeRes.value) {
           safeMode = safeModeRes.value.safe_mode ?? true;
           terminalExecution = safeModeRes.value.terminal_execution_enabled ?? false;
+        } else {
+          try {
+            const agStatus = await apiFetch<any>("/agents/status");
+            if (agStatus) {
+              safeMode = agStatus.safe_mode ?? agStatus.safe_startup_mode ?? true;
+              terminalExecution =
+                agStatus.fleet?.terminal_head?.terminal_execution_enabled ??
+                agStatus.terminal_execution_enabled ??
+                false;
+            }
+          } catch {
+            // fallback defaults
+          }
         }
 
         const activeCount = items.filter((i) => ["ACTIVE", "RUNNING", "IN_PROGRESS"].includes(i.status)).length;
